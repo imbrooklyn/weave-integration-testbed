@@ -1,0 +1,168 @@
+# Weave Integration Testbed
+
+Weave Integration Testbed provides reproducible services, data, and executable
+checks for public Weave adapter demonstrations and compatibility validation.
+The current `sql` profile runs MySQL and PostgreSQL with the same stable
+business fixture.
+
+This repository is a local demonstration and validation environment. It is not
+a production deployment template.
+
+## Requirements
+
+- Go 1.27 or newer
+- Docker Engine with Docker Compose
+
+## Quick start
+
+Start both SQL services and wait for their authenticated health checks:
+
+```sh
+docker compose --profile sql up --detach --wait --wait-timeout 180
+```
+
+Reset both databases, verify the stable IDs, and compare every shared fixture
+column across the two backends:
+
+```sh
+go run ./cmd/testbedctl check --timeout=2m
+```
+
+Run the memory reference, both SQL Adapter demos, and the end-to-end matrix:
+
+```sh
+go run ./cmd/memory --timeout=2m
+go run ./cmd/gormgen --backend=all --timeout=2m
+go run ./cmd/gorm --backend=all --timeout=2m
+go test -tags=integration ./integration
+```
+
+Stop the isolated environment:
+
+```sh
+docker compose --profile sql down --volumes --remove-orphans
+```
+
+Every Demo has a finite timeout, closes its database pool before exiting, and
+returns a nonzero status when compilation, execution, or an ID-set assertion
+fails. No external secret or interactive step is required. See
+[cmd/README.md](cmd/README.md) for per-Adapter details.
+
+## Runnable Adapter matrix
+
+| Demo | Backend | Public execution path | Canonical result |
+| --- | --- | --- | --- |
+| `cmd/memory` | In-process | memory typed fields and `Condition.Match` | 28 passed, 0 skipped |
+| `cmd/gormgen` | MySQL, PostgreSQL | generated model/query and generated DAO `Where` | 27 passed, 1 skipped |
+| `cmd/gorm` | MySQL, PostgreSQL | typed GORM fields and `DB.Where` | 27 passed, 1 skipped |
+
+The commands print each scenario name and its final sorted record-ID set. They
+do not use generated SQL text as semantic evidence. SQL demos accept
+`--backend=mysql`, `--backend=postgres`, or the default `--backend=all`;
+`--timeout` applies independently to each selected backend.
+
+## Environment commands
+
+`testbedctl` accepts `--backend=all`, `--backend=mysql`, or
+`--backend=postgres`. Each command has a finite per-backend timeout.
+
+```sh
+go run ./cmd/testbedctl health --timeout=2m
+go run ./cmd/testbedctl reset --timeout=2m
+go run ./cmd/testbedctl verify --timeout=2m
+go run ./cmd/testbedctl check --timeout=2m
+```
+
+- `health` performs an authenticated database ping.
+- `reset` replays the backend DDL and seed files.
+- `verify` checks the stable record ID set.
+- `check` resets and verifies each selected backend. With both backends selected,
+  it also compares every shared fixture column without logging stored values.
+
+## SQL profile
+
+| Service | Image | Host endpoint | Database |
+| --- | --- | --- | --- |
+| MySQL | `mysql:8.0.40` | `127.0.0.1:33306` | `weave_testbed` |
+| PostgreSQL | `postgres:15.12-alpine` | `127.0.0.1:35432` | `weave_testbed` |
+
+Only the database port for each service is published, and it is bound to the
+host loopback interface. Database storage uses container-local temporary filesystems,
+so stopping the Compose project removes the service data.
+
+The committed defaults use the public local-only account `weave` with password
+`weave_demo_only`. These credentials are intentionally non-secret and must never
+be reused for production or a network-accessible database. Copy `.env.example`
+to `.env` to change local ports or credentials; `.env` is ignored by Git.
+
+## Stable fixture
+
+Both backends create `semantic_records` from explicit DDL and seed it with the
+same six IDs: `r01` through `r06`. The fixture includes integers, fixed-scale
+decimals, literal text metacharacters, Unicode, booleans, fixed UTC timestamps,
+nullable values, and an equality-only text column.
+
+The SQL storage model materializes both explicit null and an unavailable field
+as SQL `NULL`. The canonical SQL result for `explicit null only` is therefore
+`[r03 r04]`, and nullable membership containing null yields
+`[r02 r03 r04 r06]`. Memory keeps the states distinct and yields `[r03]` and
+`[r02 r03 r06]` respectively. The dedicated `missing state` case runs only in
+memory; the other 25 SQL results match the memory reference exactly.
+
+All scenario construction and expected IDs come from the public
+`weave/compilertest` fixture. The Demo commands and integration test invoke the
+same testbed harness functions, so neither path owns a copied Predicate case.
+
+The source files are:
+
+```text
+testdata/mysql/001_schema.sql
+testdata/mysql/002_seed.sql
+testdata/postgres/001_schema.sql
+testdata/postgres/002_seed.sql
+```
+
+The schema and seed files are deliberately replayable. Changes must keep the
+business fixture and stable IDs equivalent across MySQL and PostgreSQL.
+
+## Generated GORM Gen fixture
+
+`internal/gormgenmodel` and `internal/gormgenquery` are generated by
+`gorm.io/gen` from the live `semantic_records` table. With the SQL profile
+healthy, regenerate both packages with:
+
+```sh
+go generate .
+```
+
+Generated files are committed so normal Demo and test runs do not need schema
+introspection. A schema change must regenerate both packages and keep the DDL,
+seed, Demo, and integration matrix in one compatible update.
+
+## End-to-end test
+
+The integration test resets each SQL fixture, runs the same canonical scenario
+runner used by the Demos, compares each applicable SQL result with the memory
+reference, and requires GORM Gen and GORM to agree on every SQL result:
+
+```sh
+go test -race -tags=integration ./integration
+```
+
+## Project boundaries
+
+- Environment and query wiring use public Go, driver, Weave, and adapter APIs.
+- The testbed executes compiled conditions and compares final record ID sets.
+- The testbed does not implement adapter compilers.
+- Service credentials, schemas, and data are for demonstration and validation only.
+
+## License
+
+Weave Integration Testbed is licensed under the Apache License 2.0. See
+[LICENSE](LICENSE).
+
+Apache-2.0 applies to this repository's own content. Referenced container
+images and downloaded Go modules remain independent third-party software under
+their respective licenses and notices; this project does not relicense them.
+Review the terms shipped with the exact third-party version before
+redistributing those artifacts.

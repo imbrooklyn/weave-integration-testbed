@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testbed-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOWORK: "off"
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Verify module files
+        run: |
+          go mod verify
+          go mod tidy -diff
+      - name: Run unit tests
+        run: go test ./...
+      - name: Run race tests
+        run: go test -race ./...
+      - name: Run vet
+        run: go vet ./...
+      - name: Validate Compose configuration
+        run: docker compose --profile sql config --quiet
+
+  sql:
+    name: SQL environment
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      COMPOSE_PROJECT_NAME: weave-testbed-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start SQL services
+        run: docker compose --profile sql up --detach --wait --wait-timeout 180
+      - name: Check fixture replay
+        run: |
+          go run ./cmd/testbedctl check --timeout=2m
+          go run ./cmd/testbedctl check --timeout=2m
+      - name: Verify generated GORM Gen fixture
+        run: |
+          go generate .
+          git diff --exit-code -- internal/gormgenmodel internal/gormgenquery
+      - name: Run Adapter demos
+        run: |
+          go run ./cmd/memory --timeout=2m
+          go run ./cmd/gormgen --backend=all --timeout=2m
+          go run ./cmd/gorm --backend=all --timeout=2m
+      - name: Run end-to-end match-set matrix
+        run: go test -race -tags=integration ./integration
+      - name: Stop SQL services
+        if: always()
+        run: docker compose --profile sql down --volumes --remove-orphans

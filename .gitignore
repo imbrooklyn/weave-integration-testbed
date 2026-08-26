@@ -25,6 +25,10 @@ __debug_bin*
 /go.work
 /go.work.sum
 
+# Local environment overrides and credentials.
+/.env
+/.env.*
+!/.env.example
 
 /tmp/
 

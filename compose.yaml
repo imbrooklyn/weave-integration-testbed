@@ -1,0 +1,79 @@
+name: weave-integration-testbed
+
+services:
+  mysql:
+    image: mysql:8.0.40
+    profiles: [sql, all]
+    restart: "no"
+    environment:
+      MYSQL_DATABASE: "${WEAVE_TESTBED_MYSQL_DATABASE:-weave_testbed}"
+      MYSQL_USER: "${WEAVE_TESTBED_MYSQL_USER:-weave}"
+      MYSQL_PASSWORD: "${WEAVE_TESTBED_MYSQL_PASSWORD:-weave_demo_only}"
+      MYSQL_ROOT_PASSWORD: "${WEAVE_TESTBED_MYSQL_ROOT_PASSWORD:-weave_root_demo_only}"
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:${WEAVE_TESTBED_MYSQL_PORT:-33306}:3306"
+    volumes:
+      - type: bind
+        source: ./testdata/mysql
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping
+          --host=127.0.0.1 --user="$${MYSQL_USER}" --silent &&
+          MYSQL_PWD="$${MYSQL_PASSWORD}" mysql
+          --host=127.0.0.1 --user="$${MYSQL_USER}"
+          --database="$${MYSQL_DATABASE}" --execute='SELECT 1' --silent
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    networks: [sql]
+
+  postgres:
+    image: postgres:15.12-alpine
+    profiles: [sql, all]
+    restart: "no"
+    environment:
+      POSTGRES_DB: "${WEAVE_TESTBED_POSTGRES_DATABASE:-weave_testbed}"
+      POSTGRES_USER: "${WEAVE_TESTBED_POSTGRES_USER:-weave}"
+      POSTGRES_PASSWORD: "${WEAVE_TESTBED_POSTGRES_PASSWORD:-weave_demo_only}"
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "127.0.0.1:${WEAVE_TESTBED_POSTGRES_PORT:-35432}:5432"
+    volumes:
+      - type: bind
+        source: ./testdata/postgres
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready --host=127.0.0.1 --username="$${POSTGRES_USER}"
+          --dbname="$${POSTGRES_DB}" &&
+          PGPASSWORD="$${POSTGRES_PASSWORD}" psql
+          --host=127.0.0.1 --username="$${POSTGRES_USER}"
+          --dbname="$${POSTGRES_DB}" --command='SELECT 1' --quiet
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    networks: [sql]
+
+networks:
+  sql:
+    driver: bridge
