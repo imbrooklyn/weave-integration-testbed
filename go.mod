@@ -4,10 +4,10 @@ go 1.27
 
 require (
 	github.com/go-sql-driver/mysql v1.8.1
-	github.com/imbrooklyn/weave v0.1.0
-	github.com/imbrooklyn/weave-adapters/gorm v0.1.0
-	github.com/imbrooklyn/weave-adapters/gormgen v0.1.0
-	github.com/imbrooklyn/weave-adapters/memory v0.1.0
+	github.com/imbrooklyn/weave v0.1.0-alpha.1
+	github.com/imbrooklyn/weave-adapters/gorm v0.1.0-alpha.1
+	github.com/imbrooklyn/weave-adapters/gormgen v0.1.0-alpha.1
+	github.com/imbrooklyn/weave-adapters/memory v0.1.0-alpha.1
 	github.com/jackc/pgx/v5 v5.6.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
