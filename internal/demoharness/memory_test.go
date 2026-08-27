@@ -13,7 +13,7 @@ func TestMemoryReferenceMatchSets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunMemory() error = %v", err)
 	}
-	if got, want := len(report.Results), 28; got != want {
+	if got, want := len(report.Results), 31; got != want {
 		t.Fatalf("memory result count = %d, want %d", got, want)
 	}
 	if len(report.Skipped) != 0 {

@@ -1,9 +1,9 @@
 # Runnable Adapter Demos
 
-The three commands in this directory execute the same canonical Predicate
-scenarios and expected record-ID sets as the automated integration test. They
-are read-only query demonstrations; schema and seed ownership remains in
-`testdata/mysql` and `testdata/postgres`.
+The four Adapter commands in this directory execute the same canonical
+Predicate scenarios and expected record-ID sets as the automated integration
+test. They are read-only query demonstrations; schema and seed ownership
+remains in `testdata/mysql` and `testdata/postgres`.
 
 ## Environment lifecycle
 
@@ -20,6 +20,7 @@ Run all Adapter paths:
 go run ./cmd/memory --timeout=2m
 go run ./cmd/gormgen --backend=all --timeout=2m
 go run ./cmd/gorm --backend=all --timeout=2m
+go run ./cmd/goqu --backend=all --timeout=2m
 ```
 
 Always stop the local services when finished:
@@ -33,7 +34,7 @@ docker compose --profile sql down --volumes --remove-orphans
 ### memory
 
 The memory Demo is the missing-aware reference. It constructs public typed
-memory fields, compiles all 28 canonical scenarios, evaluates the resulting
+memory fields, compiles all 31 canonical scenarios, evaluates the resulting
 conditions over `compilertest.Records()`, and prints the final ID set for each
 scenario.
 
@@ -50,16 +51,22 @@ The native GORM Demo declares fields with the Adapter's public typed Field API
 and passes each compiled condition directly to traditional `DB.Where`. It uses
 the same generated record model and the same physical fixture as GORM Gen.
 
-Both SQL Demos validate 27 canonical match sets. SQL materializes missing as
-null, so `explicit null only` and nullable membership use their documented
+### goqu
+
+The goqu Demo declares canonical typed fields, compiles with the immutable
+MySQL or PostgreSQL profile, renders a prepared dialect query, and executes the
+SQL plus its separate arguments through `database/sql`.
+
+All three SQL Demos validate 30 canonical match sets. SQL materializes missing
+as null, so `explicit null only` and nullable membership use their documented
 missing-collapsed expected IDs, while the dedicated `missing state` scenario is
-reported as skipped. GORM Gen and GORM must return identical IDs for all 27
-executed SQL scenarios.
+reported as skipped. GORM Gen, GORM, and goqu must return identical IDs for all
+30 executed SQL scenarios.
 
 ## Options and exit status
 
-`gormgen` and `gorm` accept `--backend=all`, `--backend=mysql`, or
-`--backend=postgres`. All three Demos accept a positive `--timeout`; SQL
+`gormgen`, `gorm`, and `goqu` accept `--backend=all`, `--backend=mysql`, or
+`--backend=postgres`. All four Adapter Demos accept a positive `--timeout`; SQL
 timeouts apply per backend.
 
 - Exit 0: every executed match set equals its canonical expected IDs.

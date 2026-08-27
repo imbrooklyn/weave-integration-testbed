@@ -28,12 +28,13 @@ column across the two backends:
 go run ./cmd/testbedctl check --timeout=2m
 ```
 
-Run the memory reference, both SQL Adapter demos, and the end-to-end matrix:
+Run the memory reference, all three SQL Adapter demos, and the end-to-end matrix:
 
 ```sh
 go run ./cmd/memory --timeout=2m
 go run ./cmd/gormgen --backend=all --timeout=2m
 go run ./cmd/gorm --backend=all --timeout=2m
+go run ./cmd/goqu --backend=all --timeout=2m
 go test -tags=integration ./integration
 ```
 
@@ -52,9 +53,10 @@ fails. No external secret or interactive step is required. See
 
 | Demo | Backend | Public execution path | Canonical result |
 | --- | --- | --- | --- |
-| `cmd/memory` | In-process | memory typed fields and `Condition.Match` | 28 passed, 0 skipped |
-| `cmd/gormgen` | MySQL, PostgreSQL | generated model/query and generated DAO `Where` | 27 passed, 1 skipped |
-| `cmd/gorm` | MySQL, PostgreSQL | typed GORM fields and `DB.Where` | 27 passed, 1 skipped |
+| `cmd/memory` | In-process | memory typed fields and `Condition.Match` | 31 passed, 0 skipped |
+| `cmd/gormgen` | MySQL, PostgreSQL | generated model/query and generated DAO `Where` | 30 passed, 1 skipped |
+| `cmd/gorm` | MySQL, PostgreSQL | typed GORM fields and `DB.Where` | 30 passed, 1 skipped |
+| `cmd/goqu` | MySQL, PostgreSQL | typed goqu fields and prepared `database/sql` queries | 30 passed, 1 skipped |
 
 The commands print each scenario name and its final sorted record-ID set. They
 do not use generated SQL text as semantic evidence. SQL demos accept
@@ -102,12 +104,16 @@ same six IDs: `r01` through `r06`. The fixture includes integers, fixed-scale
 decimals, literal text metacharacters, Unicode, booleans, fixed UTC timestamps,
 nullable values, and an equality-only text column.
 
+Text and ID columns use `utf8mb4_bin` in MySQL and the `C` collation in
+PostgreSQL. This controlled schema removes backend-default collation behavior
+from the shared literal-text and equality fixtures.
+
 The SQL storage model materializes both explicit null and an unavailable field
 as SQL `NULL`. The canonical SQL result for `explicit null only` is therefore
 `[r03 r04]`, and nullable membership containing null yields
 `[r02 r03 r04 r06]`. Memory keeps the states distinct and yields `[r03]` and
 `[r02 r03 r06]` respectively. The dedicated `missing state` case runs only in
-memory; the other 25 SQL results match the memory reference exactly.
+memory; the other 28 SQL results match the memory reference exactly.
 
 All scenario construction and expected IDs come from the public
 `weave/compilertest` fixture. The Demo commands and integration test invoke the
@@ -143,7 +149,10 @@ seed, Demo, and integration matrix in one compatible update.
 
 The integration test resets each SQL fixture, runs the same canonical scenario
 runner used by the Demos, compares each applicable SQL result with the memory
-reference, and requires GORM Gen and GORM to agree on every SQL result:
+reference, and requires GORM Gen, GORM, and goqu to agree on every SQL result.
+The same integration package also runs the complete goqu compiler contract
+against each database, including prepared-template inspection, validation
+errors, repeated and concurrent compilation, and output ownership:
 
 ```sh
 go test -race -tags=integration ./integration

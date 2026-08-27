@@ -26,7 +26,7 @@ func TestCanonicalMatchSetMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run memory reference: %v", err)
 	}
-	assertReportShape(t, reference, 28, 0)
+	assertReportShape(t, reference, 31, 0)
 	logReport(t, reference)
 
 	for _, backend := range testenv.SQLBackends() {
@@ -34,14 +34,14 @@ func TestCanonicalMatchSetMatrix(t *testing.T) {
 			resetFixture(t, backend)
 
 			gormgenReport := runWithTimeout(t, backend, demoharness.RunGORMGen)
-			assertReportShape(t, gormgenReport, 27, 1)
+			assertReportShape(t, gormgenReport, 30, 1)
 			if err := scenario.CompareReference(reference, gormgenReport); err != nil {
 				t.Fatalf("compare GORM Gen with memory reference: %v", err)
 			}
 			logReport(t, gormgenReport)
 
 			gormReport := runWithTimeout(t, backend, demoharness.RunGORM)
-			assertReportShape(t, gormReport, 27, 1)
+			assertReportShape(t, gormReport, 30, 1)
 			if err := scenario.CompareReference(reference, gormReport); err != nil {
 				t.Fatalf("compare GORM with memory reference: %v", err)
 			}
@@ -49,6 +49,19 @@ func TestCanonicalMatchSetMatrix(t *testing.T) {
 				t.Fatalf("compare GORM Gen with GORM: %v", err)
 			}
 			logReport(t, gormReport)
+
+			goquReport := runWithTimeout(t, backend, demoharness.RunGoqu)
+			assertReportShape(t, goquReport, 30, 1)
+			if err := scenario.CompareReference(reference, goquReport); err != nil {
+				t.Fatalf("compare goqu with memory reference: %v", err)
+			}
+			if err := scenario.CompareEquivalent(gormReport, goquReport); err != nil {
+				t.Fatalf("compare GORM with goqu: %v", err)
+			}
+			if err := scenario.CompareEquivalent(gormgenReport, goquReport); err != nil {
+				t.Fatalf("compare GORM Gen with goqu: %v", err)
+			}
+			logReport(t, goquReport)
 		})
 	}
 }

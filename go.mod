@@ -3,8 +3,10 @@ module github.com/imbrooklyn/weave-integration-testbed
 go 1.27
 
 require (
+	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/imbrooklyn/weave v0.1.0-alpha.1
+	github.com/imbrooklyn/weave-adapters/goqu v0.1.0-alpha.1
 	github.com/imbrooklyn/weave-adapters/gorm v0.1.0-alpha.1
 	github.com/imbrooklyn/weave-adapters/gormgen v0.1.0-alpha.1
 	github.com/imbrooklyn/weave-adapters/memory v0.1.0-alpha.1

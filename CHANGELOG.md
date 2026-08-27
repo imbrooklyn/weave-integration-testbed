@@ -15,8 +15,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Environment health, fixture reset, stable ID verification, and cross-backend
   fixture comparison commands.
 - English project, contribution, security, and CI foundations.
-- Runnable memory, GORM Gen, and GORM demonstrations with finite timeouts,
+- Runnable memory, GORM Gen, GORM, and goqu demonstrations with finite timeouts,
   deterministic cleanup, and stable exit behavior.
 - A real GORM Gen model and query generated from the shared SQL schema.
 - A canonical match-set runner shared by Demos and end-to-end tests, including
   memory-reference comparison across MySQL and PostgreSQL.
+- Real prepared-query goqu validation for MySQL and PostgreSQL, including the
+  complete compiler contract and memory/GORM Gen/GORM/goqu match-set agreement.

@@ -73,6 +73,7 @@ jobs:
           go run ./cmd/memory --timeout=2m
           go run ./cmd/gormgen --backend=all --timeout=2m
           go run ./cmd/gorm --backend=all --timeout=2m
+          go run ./cmd/goqu --backend=all --timeout=2m
       - name: Run end-to-end match-set matrix
         run: go test -race -tags=integration ./integration
       - name: Stop SQL services
