@@ -1,4 +1,4 @@
-// Command testbedctl controls the local SQL fixture environment.
+// Command testbedctl controls the local test service fixtures.
 package main
 
 import (
@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/imbrooklyn/weave-integration-testbed/internal/fixture"
 	"github.com/imbrooklyn/weave-integration-testbed/internal/testenv"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	mongodriver "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 const defaultTimeout = 2 * time.Minute
@@ -44,9 +47,14 @@ func run(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	config := options{}
-	flags.StringVar(&config.backend, "backend", "all", "SQL backend: all, mysql, or postgres")
+	flags.StringVar(
+		&config.backend,
+		"backend",
+		"all",
+		"service selection: all, sql, mysql, postgres, or mongo",
+	)
 	flags.StringVar(&config.root, "root", ".", "repository root containing testdata")
-	flags.DurationVar(&config.timeout, "timeout", defaultTimeout, "timeout per SQL backend")
+	flags.DurationVar(&config.timeout, "timeout", defaultTimeout, "timeout per service")
 	if err := flags.Parse(arguments[1:]); err != nil {
 		return fmt.Errorf("parse %s options: %w", command, err)
 	}
@@ -56,14 +64,17 @@ func run(arguments []string, output io.Writer) error {
 	if config.timeout <= 0 {
 		return fmt.Errorf("timeout must be positive")
 	}
-	backends, err := selectedBackends(config.backend)
+	selection, err := selectedServices(config.backend)
 	if err != nil {
 		return err
 	}
 
-	recordsByBackend := make(map[testenv.Backend][]fixture.SQLRecord, len(backends))
+	recordsByBackend := make(
+		map[testenv.Backend][]fixture.SQLRecord,
+		len(selection.sqlBackends),
+	)
 	var failures []error
-	for _, backend := range backends {
+	for _, backend := range selection.sqlBackends {
 		records, runErr := runForBackend(command, config, backend, output)
 		if runErr != nil {
 			failures = append(failures, runErr)
@@ -73,10 +84,15 @@ func run(arguments []string, output io.Writer) error {
 			recordsByBackend[backend] = records
 		}
 	}
+	if selection.mongo {
+		if runErr := runForMongo(command, config, output); runErr != nil {
+			failures = append(failures, runErr)
+		}
+	}
 	if len(failures) != 0 {
 		return errors.Join(failures...)
 	}
-	if command == "check" && len(backends) == 2 {
+	if command == "check" && len(selection.sqlBackends) == 2 {
 		if err := fixture.CompareSQLRecords(
 			recordsByBackend[testenv.MySQL],
 			recordsByBackend[testenv.PostgreSQL],
@@ -86,6 +102,73 @@ func run(arguments []string, output io.Writer) error {
 		fmt.Fprintln(output, "sql: MySQL and PostgreSQL fixtures match")
 	}
 	return nil
+}
+
+func runForMongo(
+	command string,
+	options options,
+	output io.Writer,
+) (resultErr error) {
+	config, err := testenv.LoadMongoConfig()
+	if err != nil {
+		return fmt.Errorf("load MongoDB configuration: %w", err)
+	}
+	client, err := testenv.OpenMongo(config)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := testenv.CloseMongo(client); err != nil && resultErr == nil {
+			resultErr = err
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	defer cancel()
+	if err := testenv.WaitForMongo(ctx, client, 500*time.Millisecond); err != nil {
+		return err
+	}
+	server, err := testenv.ReadMongoServerInfo(ctx, client)
+	if err != nil {
+		return err
+	}
+	database := client.Database(config.Database)
+
+	switch command {
+	case "health":
+		fmt.Fprintf(output, "mongo: healthy (MongoDB %s)\n", server.Version)
+		return nil
+	case "reset":
+		if err := testenv.ResetMongo(ctx, database); err != nil {
+			return err
+		}
+		fmt.Fprintln(output, "mongo: fixture reset")
+		return nil
+	case "verify":
+		count, err := verifyMongoFixture(ctx, database.Collection(fixture.MongoCollection))
+		if err != nil {
+			return fmt.Errorf("verify MongoDB fixture: %w", err)
+		}
+		fmt.Fprintf(output, "mongo: fixture IDs verified (%d records, MongoDB %s)\n", count, server.Version)
+		return nil
+	case "check":
+		if err := testenv.ResetMongo(ctx, database); err != nil {
+			return err
+		}
+		count, err := verifyMongoFixture(ctx, database.Collection(fixture.MongoCollection))
+		if err != nil {
+			return fmt.Errorf("verify MongoDB fixture: %w", err)
+		}
+		fmt.Fprintf(
+			output,
+			"mongo: fixture reset and verified (%d records, MongoDB %s)\n",
+			count,
+			server.Version,
+		)
+		return nil
+	default:
+		return fmt.Errorf("unsupported command %q", command)
+	}
 }
 
 func runForBackend(
@@ -160,13 +243,38 @@ func verifyFixture(
 	return records, nil
 }
 
-func selectedBackends(value string) ([]testenv.Backend, error) {
-	if value == "all" {
-		return testenv.SQLBackends(), nil
-	}
-	backend, err := testenv.ParseBackend(value)
+func verifyMongoFixture(
+	ctx context.Context,
+	collection *mongodriver.Collection,
+) (int, error) {
+	ids, err := testenv.QueryMongoIDs(ctx, collection, bson.D{})
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return []testenv.Backend{backend}, nil
+	if err := fixture.CompareIDs(ids, fixture.StableIDs()); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
+type serviceSelection struct {
+	sqlBackends []testenv.Backend
+	mongo       bool
+}
+
+func selectedServices(value string) (serviceSelection, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "all":
+		return serviceSelection{sqlBackends: testenv.SQLBackends(), mongo: true}, nil
+	case "sql":
+		return serviceSelection{sqlBackends: testenv.SQLBackends()}, nil
+	case "mongo":
+		return serviceSelection{mongo: true}, nil
+	default:
+		backend, err := testenv.ParseBackend(value)
+		if err != nil {
+			return serviceSelection{}, err
+		}
+		return serviceSelection{sqlBackends: []testenv.Backend{backend}}, nil
+	}
 }

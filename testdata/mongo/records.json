@@ -1,0 +1,48 @@
+[
+  {
+    "_id": "r01",
+    "number_value": {"$numberLong": "1"},
+    "text_value": "plain-start",
+    "nullable_number": {"$numberLong": "1"},
+    "nullable_text": "plain-start",
+    "equality_only_text": "plain-start"
+  },
+  {
+    "_id": "r02",
+    "number_value": {"$numberLong": "2"},
+    "text_value": "literal %_! .*+?[](){}^$|\\ 世界\nend",
+    "nullable_number": {"$numberLong": "2"},
+    "nullable_text": "literal %_! .*+?[](){}^$|\\ 世界\nend",
+    "equality_only_text": "literal %_! .*+?[](){}^$|\\ 世界\nend"
+  },
+  {
+    "_id": "r03",
+    "number_value": {"$numberLong": "3"},
+    "text_value": "prefix-middle-suffix",
+    "nullable_number": null,
+    "nullable_text": null,
+    "equality_only_text": "prefix-middle-suffix"
+  },
+  {
+    "_id": "r04",
+    "number_value": {"$numberLong": "4"},
+    "text_value": "prefix %_ suffix",
+    "equality_only_text": "prefix %_ suffix"
+  },
+  {
+    "_id": "r05",
+    "number_value": {"$numberLong": "5"},
+    "text_value": "世界-end",
+    "nullable_number": {"$numberLong": "5"},
+    "nullable_text": "世界-end",
+    "equality_only_text": "世界-end"
+  },
+  {
+    "_id": "r06",
+    "number_value": {"$numberLong": "6"},
+    "text_value": ".*",
+    "nullable_number": {"$numberLong": "2"},
+    "nullable_text": ".*",
+    "equality_only_text": ".*"
+  }
+]

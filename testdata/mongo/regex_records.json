@@ -1,0 +1,8 @@
+[
+  {"_id": "p01", "text_value": "alpha\n"},
+  {"_id": "p02", "text_value": "alpha"},
+  {"_id": "p03", "text_value": "literal.*\\世界\nend"},
+  {"_id": "p04", "text_value": "x\nliteral.*\\世界\nend"},
+  {"_id": "p05", "text_value": "literal.*\\世界\nend\n"},
+  {"_id": "p06", "text_value": ".*\"}],\"$where\":\"return true\""}
+]

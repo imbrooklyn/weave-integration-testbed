@@ -41,7 +41,7 @@ jobs:
       - name: Run vet
         run: go vet ./...
       - name: Validate Compose configuration
-        run: docker compose --profile sql config --quiet
+        run: docker compose --profile all config --quiet
 
   sql:
     name: SQL environment
@@ -75,7 +75,72 @@ jobs:
           go run ./cmd/gorm --backend=all --timeout=2m
           go run ./cmd/goqu --backend=all --timeout=2m
       - name: Run end-to-end match-set matrix
-        run: go test -race -tags=integration ./integration
+        run: >-
+          go test -race -count=1 -tags=integration
+          -run '^(TestCanonicalSQLMatchSetMatrix|TestGoqu)' ./integration
       - name: Stop SQL services
         if: always()
         run: docker compose --profile sql down --volumes --remove-orphans
+
+  document:
+    name: MongoDB ${{ matrix.mongodb }}
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mongodb: ["mongo:6.0.28", "mongo:8.3.8"]
+    env:
+      COMPOSE_PROJECT_NAME: weave-document-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      WEAVE_TESTBED_MONGO_IMAGE: ${{ matrix.mongodb }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start MongoDB
+        run: docker compose --profile document up --detach --wait --wait-timeout 180
+      - name: Check MongoDB fixture replay
+        run: |
+          go run ./cmd/testbedctl check --backend=mongo --timeout=2m
+          go run ./cmd/testbedctl check --backend=mongo --timeout=2m
+      - name: Run MongoDB Adapter demo
+        run: go run ./cmd/mongo --timeout=2m
+      - name: Run real MongoDB contract
+        run: >-
+          go test -race -count=1 -tags=integration
+          -run '^TestMongo' ./integration
+      - name: Stop MongoDB
+        if: always()
+        run: docker compose --profile document down --volumes --remove-orphans
+
+  cross-model:
+    name: Cross-model match sets
+    needs: [sql, document]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      COMPOSE_PROJECT_NAME: weave-cross-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start all current services
+        run: docker compose --profile all up --detach --wait --wait-timeout 180
+      - name: Reset all fixtures
+        run: go run ./cmd/testbedctl check --backend=all --timeout=2m
+      - name: Compare cross-model match sets
+        run: >-
+          go test -race -count=1 -tags=integration
+          -run '^TestCrossModelMatchSetMatrix$' ./integration
+      - name: Stop all services
+        if: always()
+        run: docker compose --profile all down --volumes --remove-orphans

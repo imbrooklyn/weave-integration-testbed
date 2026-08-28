@@ -16,7 +16,7 @@ import (
 
 const backendTimeout = 2 * time.Minute
 
-func TestCanonicalMatchSetMatrix(t *testing.T) {
+func TestCanonicalSQLMatchSetMatrix(t *testing.T) {
 	referenceContext, cancelReference := context.WithTimeout(
 		context.Background(),
 		backendTimeout,
@@ -64,6 +64,76 @@ func TestCanonicalMatchSetMatrix(t *testing.T) {
 			logReport(t, goquReport)
 		})
 	}
+}
+
+func TestCrossModelMatchSetMatrix(t *testing.T) {
+	referenceContext, cancelReference := context.WithTimeout(
+		context.Background(),
+		backendTimeout,
+	)
+	reference, err := demoharness.RunMemory(referenceContext)
+	cancelReference()
+	if err != nil {
+		t.Fatalf("run memory reference: %v", err)
+	}
+	assertReportShape(t, reference, 31, 0)
+
+	resetMongoFixture(t)
+	mongoReport := runMongoWithTimeout(t)
+	assertReportShape(t, mongoReport, 31, 0)
+	if err := scenario.CompareReference(reference, mongoReport); err != nil {
+		t.Fatalf("compare MongoDB with memory reference: %v", err)
+	}
+	logReport(t, mongoReport)
+
+	for _, backend := range testenv.SQLBackends() {
+		t.Run(string(backend), func(t *testing.T) {
+			resetFixture(t, backend)
+			candidates := []struct {
+				name string
+				run  func(context.Context, testenv.Backend) (scenario.Report, error)
+			}{
+				{name: "gormgen", run: demoharness.RunGORMGen},
+				{name: "gorm", run: demoharness.RunGORM},
+				{name: "goqu", run: demoharness.RunGoqu},
+			}
+			for _, candidate := range candidates {
+				report := runWithTimeout(t, backend, candidate.run)
+				assertReportShape(t, report, 30, 1)
+				if err := scenario.CompareReference(reference, report); err != nil {
+					t.Fatalf("compare %s with memory reference: %v", candidate.name, err)
+				}
+				compared, err := scenario.CompareCoreIntersection(mongoReport, report)
+				if err != nil {
+					t.Fatalf("compare MongoDB with %s: %v", candidate.name, err)
+				}
+				if compared != 28 {
+					t.Fatalf(
+						"MongoDB/%s exact core intersection = %d, want 28",
+						candidate.name,
+						compared,
+					)
+				}
+				t.Logf(
+					"cross-model match-set mongo/%s/%s: %d exact scenarios",
+					candidate.name,
+					backend,
+					compared,
+				)
+			}
+		})
+	}
+}
+
+func runMongoWithTimeout(t *testing.T) scenario.Report {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), backendTimeout)
+	defer cancel()
+	report, err := demoharness.RunMongo(ctx)
+	if err != nil {
+		t.Fatalf("run MongoDB backend: %v", err)
+	}
+	return report
 }
 
 func runWithTimeout(

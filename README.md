@@ -1,9 +1,10 @@
 # Weave Integration Testbed
 
 Weave Integration Testbed provides reproducible services, data, and executable
-checks for public Weave adapter demonstrations and compatibility validation.
-The current `sql` profile runs MySQL and PostgreSQL with the same stable
-business fixture.
+checks for public Weave Adapter demonstrations and compatibility validation.
+The `sql` profile runs MySQL and PostgreSQL, while the `document` profile runs
+MongoDB. All paths use the canonical `weave/compilertest` records, Predicate
+scenarios, and expected record-ID sets.
 
 This repository is a local demonstration and validation environment. It is not
 a production deployment template.
@@ -15,154 +16,211 @@ a production deployment template.
 
 ## Quick start
 
-Start both SQL services and wait for their authenticated health checks:
+Start all current services and wait for authenticated health checks:
 
 ```sh
-docker compose --profile sql up --detach --wait --wait-timeout 180
+docker compose --profile all up --detach --wait --wait-timeout 180
 ```
 
-Reset both databases, verify the stable IDs, and compare every shared fixture
-column across the two backends:
+Reset and verify all three service fixtures:
 
 ```sh
-go run ./cmd/testbedctl check --timeout=2m
+go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-Run the memory reference, all three SQL Adapter demos, and the end-to-end matrix:
+Run the memory reference, SQL Demos, MongoDB Demo, and complete real-service
+matrix. `-count=1` prevents a previous service result from being reused through
+the Go test cache.
 
 ```sh
 go run ./cmd/memory --timeout=2m
 go run ./cmd/gormgen --backend=all --timeout=2m
 go run ./cmd/gorm --backend=all --timeout=2m
 go run ./cmd/goqu --backend=all --timeout=2m
-go test -tags=integration ./integration
+go run ./cmd/mongo --timeout=2m
+go test -race -count=1 -tags=integration ./integration
 ```
 
 Stop the isolated environment:
 
 ```sh
-docker compose --profile sql down --volumes --remove-orphans
+docker compose --profile all down --volumes --remove-orphans
 ```
 
-Every Demo has a finite timeout, closes its database pool before exiting, and
-returns a nonzero status when compilation, execution, or an ID-set assertion
-fails. No external secret or interactive step is required. See
-[cmd/README.md](cmd/README.md) for per-Adapter details.
+Every Demo has a finite timeout, closes its client or database pool before
+exiting, and returns a nonzero status when setup, compilation, execution, or an
+ID-set assertion fails. No external secret or interactive step is required.
+See [cmd/README.md](cmd/README.md) for per-Adapter details.
 
 ## Runnable Adapter matrix
 
 | Demo | Backend | Public execution path | Canonical result |
 | --- | --- | --- | --- |
 | `cmd/memory` | In-process | memory typed fields and `Condition.Match` | 31 passed, 0 skipped |
-| `cmd/gormgen` | MySQL, PostgreSQL | generated model/query and generated DAO `Where` | 30 passed, 1 skipped |
+| `cmd/gormgen` | MySQL, PostgreSQL | generated DAO `Where` | 30 passed, 1 skipped |
 | `cmd/gorm` | MySQL, PostgreSQL | typed GORM fields and `DB.Where` | 30 passed, 1 skipped |
 | `cmd/goqu` | MySQL, PostgreSQL | typed goqu fields and prepared `database/sql` queries | 30 passed, 1 skipped |
+| `cmd/mongo` | MongoDB 6.0+ | typed Mongo paths and `Collection.Find` with ordered BSON | 31 passed, 0 skipped |
 
 The commands print each scenario name and its final sorted record-ID set. They
-do not use generated SQL text as semantic evidence. SQL demos accept
-`--backend=mysql`, `--backend=postgres`, or the default `--backend=all`;
-`--timeout` applies independently to each selected backend.
+do not compare backend query text or serialize credentials and stored text into
+the report. SQL Demos accept `--backend=mysql`, `--backend=postgres`, or the
+default `--backend=all`. `--timeout` applies independently to each selected
+service.
 
 ## Environment commands
 
-`testbedctl` accepts `--backend=all`, `--backend=mysql`, or
-`--backend=postgres`. Each command has a finite per-backend timeout.
+`testbedctl` accepts `--backend=all`, `--backend=sql`, `--backend=mysql`,
+`--backend=postgres`, or `--backend=mongo`. The default `all` now selects every
+current service. Each operation has a finite per-service timeout.
 
 ```sh
-go run ./cmd/testbedctl health --timeout=2m
-go run ./cmd/testbedctl reset --timeout=2m
-go run ./cmd/testbedctl verify --timeout=2m
-go run ./cmd/testbedctl check --timeout=2m
+go run ./cmd/testbedctl health --backend=all --timeout=2m
+go run ./cmd/testbedctl reset --backend=all --timeout=2m
+go run ./cmd/testbedctl verify --backend=all --timeout=2m
+go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-- `health` performs an authenticated database ping.
-- `reset` replays the backend DDL and seed files.
-- `verify` checks the stable record ID set.
-- `check` resets and verifies each selected backend. With both backends selected,
-  it also compares every shared fixture column without logging stored values.
+- `health` performs an authenticated ping and reports the real MongoDB version.
+- `reset` replays SQL scripts or inserts fresh ordered BSON fixture documents.
+- `verify` checks the stable record-ID set.
+- `check` resets and verifies each selected service. When both SQL backends are
+  selected, it also compares every shared SQL fixture column without logging
+  stored values.
 
-## SQL profile
+## Service profiles
 
-| Service | Image | Host endpoint | Database |
-| --- | --- | --- | --- |
-| MySQL | `mysql:8.0.40` | `127.0.0.1:33306` | `weave_testbed` |
-| PostgreSQL | `postgres:15.12-alpine` | `127.0.0.1:35432` | `weave_testbed` |
+| Profile | Service | Default image | Host endpoint | Database |
+| --- | --- | --- | --- | --- |
+| `sql` | MySQL | `mysql:8.0.40` | `127.0.0.1:33306` | `weave_testbed` |
+| `sql` | PostgreSQL | `postgres:15.12-alpine` | `127.0.0.1:35432` | `weave_testbed` |
+| `document` | MongoDB | `mongo:6.0.28` | `127.0.0.1:37017` | `weave_testbed` |
 
-Only the database port for each service is published, and it is bound to the
-host loopback interface. Database storage uses container-local temporary filesystems,
-so stopping the Compose project removes the service data.
+`all` enables both current profiles. Only service ports are published and each
+is bound to the host loopback interface. Storage uses container-local temporary
+filesystems, so stopping the Compose project removes test data.
+
+The MongoDB profile can run another fixed compatible image without editing the
+Compose file. The real-service matrix validates both the 6.0 baseline and the
+current stable 8.3 line:
+
+```sh
+WEAVE_TESTBED_MONGO_IMAGE=mongo:8.3.8 \
+  docker compose --profile document up --detach --wait --wait-timeout 180
+```
 
 The committed defaults use the public local-only account `weave` with password
-`weave_demo_only`. These credentials are intentionally non-secret and must never
-be reused for production or a network-accessible database. Copy `.env.example`
-to `.env` to change local ports or credentials; `.env` is ignored by Git.
+`weave_demo_only`. These credentials are intentionally non-secret and must
+never be reused for production or a network-accessible database. Copy
+`.env.example` to `.env` to change local endpoints or credentials; `.env` is
+ignored by Git.
 
 ## Stable fixture
 
-Both backends create `semantic_records` from explicit DDL and seed it with the
-same six IDs: `r01` through `r06`. The fixture includes integers, fixed-scale
-decimals, literal text metacharacters, Unicode, booleans, fixed UTC timestamps,
-nullable values, and an equality-only text column.
+Every service exposes the six canonical IDs `r01` through `r06`. SQL DDL and
+seed files include the wider testbed row shape. MongoDB `records.json` stores
+the canonical scalar fields as Extended JSON and is checked structurally
+against documents generated from `compilertest.Records()`.
 
-Text and ID columns use `utf8mb4_bin` in MySQL and the `C` collation in
-PostgreSQL. This controlled schema removes backend-default collation behavior
-from the shared literal-text and equality fixtures.
+The Mongo Demo and automated tests do not own a second scenario or expected-ID
+list: both execute `compilertest.Scenarios`, and the runtime Mongo documents are
+materialized from `compilertest.Records()`. The committed Extended JSON is an
+initialization artifact whose equality with that shared fixture is tested.
 
-The SQL storage model materializes both explicit null and an unavailable field
-as SQL `NULL`. The canonical SQL result for `explicit null only` is therefore
-`[r03 r04]`, and nullable membership containing null yields
-`[r02 r03 r04 r06]`. Memory keeps the states distinct and yields `[r03]` and
-`[r02 r03 r06]` respectively. The dedicated `missing state` case runs only in
-memory; the other 28 SQL results match the memory reference exactly.
+The MongoDB fixture preserves all three nullable states:
 
-All scenario construction and expected IDs come from the public
-`weave/compilertest` fixture. The Demo commands and integration test invoke the
-same testbed harness functions, so neither path owns a copied Predicate case.
+- r01, r02, r05, and r06 contain non-null values;
+- r03 contains explicit BSON null;
+- r04 omits both nullable keys completely.
 
-The source files are:
+The separate `regex_probe_records` collection contains only real-server seam
+probes for literal metacharacters, backslashes, Unicode, embedded and trailing
+newlines, absolute subject anchors, and an injection-like string value. It does
+not replace or duplicate canonical Predicate scenarios.
+
+SQL materializes explicit null and an unavailable field as SQL `NULL`. Its
+canonical `explicit null only` and nullable-membership results therefore use
+the documented missing-collapsed sets, and `missing state` is skipped. MongoDB
+and memory preserve the states and execute all 31 scenarios. The remaining 28
+unadjusted scenarios are compared exactly across MongoDB, GORM Gen, GORM, and
+goqu by final ID set.
+
+The committed fixture sources are:
 
 ```text
 testdata/mysql/001_schema.sql
 testdata/mysql/002_seed.sql
 testdata/postgres/001_schema.sql
 testdata/postgres/002_seed.sql
+testdata/mongo/records.json
+testdata/mongo/regex_records.json
+testdata/mongo/init.js
 ```
 
-The schema and seed files are deliberately replayable. Changes must keep the
-business fixture and stable IDs equivalent across MySQL and PostgreSQL.
+## MongoDB semantic checks
+
+The MongoDB harness uses the official Go Driver v2.8.2, verifies `buildInfo`
+reports MongoDB 6.0 or newer, and passes each compiled `bson.D` directly to
+`Collection.Find`. It checks every standard Operator, constants, empty groups,
+all four Logic forms, three-level nesting, nullable membership, Native, Expr,
+validation failures, stable first error, and concurrent execution.
+
+Dedicated real-service regressions compare bare MongoDB `$ne` and `$nin`
+filters with the guarded Weave forms. Bare negative operators include explicit
+null and missing records according to MongoDB rules; the compiled filters must
+match the memory-reference set instead. The tests also prove that `IsNull`
+selects only r03, `NotNull` selects only present non-null records, and logical
+negation preserves the binary match-set complement.
+
+Literal Contains, HasPrefix, and HasSuffix are executed with regex
+metacharacters, a backslash, Unicode, and newlines. The emitted `$regex` value
+must be one quoted string with no caller-controlled options. A trailing-newline
+probe distinguishes raw `$`, which can match before a final newline, from the
+Adapter's absolute `\z` suffix anchor.
+
+Typed path injection attempts are rejected before execution. An operator-like
+query string is retained as one BSON value and can match only an identical
+stored string. Failed compilation returns a nil document and redacted
+structured error. Repeated and concurrent compilation must produce identical
+ordered BSON bytes and final IDs.
 
 ## Generated GORM Gen fixture
 
 `internal/gormgenmodel` and `internal/gormgenquery` are generated by
-`gorm.io/gen` from the live `semantic_records` table. With the SQL profile
+`gorm.io/gen` from the live `semantic_records` SQL table. With the SQL profile
 healthy, regenerate both packages with:
 
 ```sh
 go generate .
 ```
 
-Generated files are committed so normal Demo and test runs do not need schema
-introspection. A schema change must regenerate both packages and keep the DDL,
-seed, Demo, and integration matrix in one compatible update.
+Generated files are committed. A compatible SQL schema change must regenerate
+both packages and keep the DDL, seed, Demo, and integration matrix aligned.
 
-## End-to-end test
+## End-to-end tests
 
-The integration test resets each SQL fixture, runs the same canonical scenario
-runner used by the Demos, compares each applicable SQL result with the memory
-reference, and requires GORM Gen, GORM, and goqu to agree on every SQL result.
-The same integration package also runs the complete goqu compiler contract
-against each database, including prepared-template inspection, validation
-errors, repeated and concurrent compilation, and output ownership:
+Run only the document contract against a healthy MongoDB service:
 
 ```sh
-go test -race -tags=integration ./integration
+go test -race -count=1 -tags=integration -run '^TestMongo' ./integration
 ```
+
+Run only the full cross-model ID-set comparison with all current services:
+
+```sh
+go test -race -count=1 -tags=integration \
+  -run '^TestCrossModelMatchSetMatrix$' ./integration
+```
+
+The complete package also retains the SQL matrix and goqu compiler contract.
+No test treats BSON snapshots, generated SQL, or query text as a substitute for
+real backend match sets.
 
 ## Project boundaries
 
-- Environment and query wiring use public Go, driver, Weave, and adapter APIs.
-- The testbed executes compiled conditions and compares final record ID sets.
-- The testbed does not implement adapter compilers.
+- Environment and query wiring use public Go, driver, Weave, and Adapter APIs.
+- The testbed executes compiled conditions and compares final record-ID sets.
+- The testbed does not implement Adapter compilers.
 - Service credentials, schemas, and data are for demonstration and validation only.
 
 ## License

@@ -74,6 +74,43 @@ services:
       start_period: 20s
     networks: [sql]
 
+  mongo:
+    image: "${WEAVE_TESTBED_MONGO_IMAGE:-mongo:6.0.28}"
+    profiles: [document, all]
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${WEAVE_TESTBED_MONGO_ROOT_USER:-root}"
+      MONGO_INITDB_ROOT_PASSWORD: "${WEAVE_TESTBED_MONGO_ROOT_PASSWORD:-weave_root_demo_only}"
+      MONGO_INITDB_DATABASE: "${WEAVE_TESTBED_MONGO_DATABASE:-weave_testbed}"
+      WEAVE_TESTBED_MONGO_USER: "${WEAVE_TESTBED_MONGO_USER:-weave}"
+      WEAVE_TESTBED_MONGO_PASSWORD: "${WEAVE_TESTBED_MONGO_PASSWORD:-weave_demo_only}"
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${WEAVE_TESTBED_MONGO_PORT:-37017}:27017"
+    volumes:
+      - type: bind
+        source: ./testdata/mongo
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+    tmpfs:
+      - /data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --host=127.0.0.1
+          --username="$${MONGO_INITDB_ROOT_USERNAME}"
+          --password="$${MONGO_INITDB_ROOT_PASSWORD}"
+          --authenticationDatabase=admin
+          --eval='quit(db.adminCommand({ping: 1}).ok ? 0 : 2)'
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    networks: [document]
+
 networks:
   sql:
+    driver: bridge
+  document:
     driver: bridge

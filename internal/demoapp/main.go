@@ -23,6 +23,9 @@ type MemoryRunner func(context.Context) (scenario.Report, error)
 // SQLRunner executes one SQL Adapter/backend pair.
 type SQLRunner func(context.Context, testenv.Backend) (scenario.Report, error)
 
+// DocumentRunner executes one document Adapter against its configured service.
+type DocumentRunner func(context.Context) (scenario.Report, error)
+
 // RunMemory parses the common timeout, executes runner, and returns a process
 // exit code: zero for success, one for execution failure, and two for usage.
 func RunMemory(
@@ -51,6 +54,40 @@ func RunMemory(
 	}
 	if err := scenario.WriteReport(stdout, report); err != nil {
 		fmt.Fprintf(stderr, "memory demo failed to write report: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// RunDocument parses a finite timeout, executes one document Adapter, and
+// returns a stable process exit code.
+func RunDocument(
+	adapter string,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	runner DocumentRunner,
+) int {
+	flags := flag.NewFlagSet(adapter, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	timeout := flags.Duration("timeout", defaultTimeout, "overall demo timeout")
+	if code := parseFlags(flags, args, timeout, stderr); code >= 0 {
+		return code
+	}
+	if runner == nil {
+		fmt.Fprintf(stderr, "%s demo failed: nil runner\n", adapter)
+		return 1
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+	report, err := runner(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "%s demo failed: %v\n", adapter, err)
+		return 1
+	}
+	if err := scenario.WriteReport(stdout, report); err != nil {
+		fmt.Fprintf(stderr, "%s demo failed to write report: %v\n", adapter, err)
 		return 1
 	}
 	return 0

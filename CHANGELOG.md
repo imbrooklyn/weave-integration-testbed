@@ -22,3 +22,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   memory-reference comparison across MySQL and PostgreSQL.
 - Real prepared-query goqu validation for MySQL and PostgreSQL, including the
   complete compiler contract and memory/GORM Gen/GORM/goqu match-set agreement.
+- A `document` Compose profile with fixed MongoDB 6.0.28 defaults, a current
+  MongoDB 8.3.8 CI variant, authenticated health checks, and replayable
+  Extended JSON initialization that preserves value, explicit null, and missing.
+- A runnable mongo Demo and real-server compiler contract covering all 31
+  canonical match sets, negative-operator guards, literal PCRE anchors,
+  injection boundaries, redacted failures, and concurrent ordered BSON.
+- Exact match-set differential checks across MongoDB, memory, GORM Gen, GORM,
+  and goqu within their 28-scenario unadjusted storage intersection.

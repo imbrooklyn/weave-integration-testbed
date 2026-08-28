@@ -1,5 +1,5 @@
-// Package fixture defines stable SQL records and comparison helpers used by
-// the runnable environment and integration checks.
+// Package fixture defines stable service records and comparison helpers used
+// by the runnable environment and integration checks.
 package fixture
 
 import (

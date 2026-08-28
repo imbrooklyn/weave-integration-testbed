@@ -23,6 +23,7 @@ network, and never reuse these credentials elsewhere.
 
 ## Native query inputs
 
-Demonstrations that use an adapter's native condition or expression API must use
-the upstream parameterization and escaping facilities. The testbed validates its
-reviewed examples; it does not make arbitrary native SQL or expressions safe.
+Demonstrations that use an Adapter's native condition or expression API must use
+the upstream parameterization, BSON value, and escaping facilities appropriate
+to that backend. The testbed validates its reviewed examples; it does not make
+arbitrary native SQL, BSON operator documents, or expressions safe.

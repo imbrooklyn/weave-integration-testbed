@@ -54,6 +54,39 @@ func TestRunSQLUsesStableBackendOrder(t *testing.T) {
 	}
 }
 
+func TestRunDocumentWritesReportAndReturnsSuccess(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := RunDocument(
+		"mongo",
+		nil,
+		&stdout,
+		&stderr,
+		func(context.Context) (scenario.Report, error) {
+			return scenario.Report{
+				Adapter: "mongo",
+				Backend: "mongodb-6.0.28",
+				Results: []scenario.Result{{Name: "one", IDs: []string{"r01"}}},
+			}, nil
+		},
+	)
+	if code != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "1 passed") {
+		t.Fatalf(
+			"RunDocument() = code %d, stdout %q, stderr %q",
+			code,
+			stdout.String(),
+			stderr.String(),
+		)
+	}
+}
+
+func TestRunDocumentRejectsInvalidUsage(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := RunDocument("mongo", []string{"--timeout=0"}, &stdout, &stderr, nil)
+	if code != 2 || !strings.Contains(stderr.String(), "timeout must be positive") {
+		t.Fatalf("RunDocument() = code %d, stderr %q", code, stderr.String())
+	}
+}
+
 func TestRunSQLRejectsInvalidUsage(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := RunSQL("gorm", []string{"--timeout=0"}, &stdout, &stderr, nil)

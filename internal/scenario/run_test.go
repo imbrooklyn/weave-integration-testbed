@@ -68,6 +68,42 @@ func TestCompareEquivalentIncludesStorageAdjustedSets(t *testing.T) {
 	}
 }
 
+func TestCompareCoreIntersectionSkipsOnlyDeclaredStorageDifferences(t *testing.T) {
+	left := Report{
+		Results: []Result{
+			{Name: "exact", IDs: []string{"r02", "r01"}},
+			{Name: "null", IDs: []string{"r03"}},
+			{Name: "missing", IDs: []string{"r04"}},
+		},
+	}
+	right := Report{
+		Results: []Result{
+			{Name: "exact", IDs: []string{"r01", "r02"}},
+			{
+				Name:                    "null",
+				IDs:                     []string{"r03", "r04"},
+				UsesMissingCollapsedSet: true,
+			},
+		},
+		Skipped: []string{"missing"},
+	}
+	compared, err := CompareCoreIntersection(left, right)
+	if err != nil {
+		t.Fatalf("CompareCoreIntersection() error = %v", err)
+	}
+	if compared != 1 {
+		t.Fatalf("CompareCoreIntersection() count = %d, want 1", compared)
+	}
+}
+
+func TestCompareCoreIntersectionRejectsUnadjustedDifference(t *testing.T) {
+	left := Report{Results: []Result{{Name: "exact", IDs: []string{"r01"}}}}
+	right := Report{Results: []Result{{Name: "exact", IDs: []string{"r02"}}}}
+	if _, err := CompareCoreIntersection(left, right); err == nil {
+		t.Fatal("CompareCoreIntersection() error = nil")
+	}
+}
+
 func TestWriteReportUsesStableMatchSetEvidence(t *testing.T) {
 	report := Report{
 		Adapter: "gormgen",

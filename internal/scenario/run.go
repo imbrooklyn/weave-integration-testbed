@@ -220,6 +220,117 @@ func CompareEquivalent(left, right Report) error {
 	return nil
 }
 
+// CompareCoreIntersection compares final ID sets for every scenario that both
+// reports represent without a backend storage adjustment. It still requires
+// both reports to account for the same scenario universe and returns the
+// number of exact match sets compared.
+func CompareCoreIntersection(left, right Report) (int, error) {
+	leftResults, leftSkipped, err := indexedReport("left", left)
+	if err != nil {
+		return 0, err
+	}
+	rightResults, rightSkipped, err := indexedReport("right", right)
+	if err != nil {
+		return 0, err
+	}
+	leftNames := reportNames(leftResults, leftSkipped)
+	rightNames := reportNames(rightResults, rightSkipped)
+	if len(leftNames) != len(rightNames) {
+		return 0, fmt.Errorf(
+			"report scenario counts differ: %d != %d",
+			len(leftNames),
+			len(rightNames),
+		)
+	}
+	for _, result := range left.Results {
+		name := result.Name
+		if _, exists := rightNames[name]; !exists {
+			return 0, fmt.Errorf("right report does not account for scenario %q", name)
+		}
+	}
+	for _, name := range left.Skipped {
+		if _, exists := rightNames[name]; !exists {
+			return 0, fmt.Errorf("right report does not account for scenario %q", name)
+		}
+	}
+
+	compared := 0
+	for _, leftResult := range left.Results {
+		name := leftResult.Name
+		rightResult, exists := rightResults[name]
+		if !exists {
+			continue
+		}
+		if leftResult.UsesMissingCollapsedSet || rightResult.UsesMissingCollapsedSet {
+			continue
+		}
+		if err := fixture.CompareIDs(leftResult.IDs, rightResult.IDs); err != nil {
+			return 0, fmt.Errorf("scenario %q differs in core intersection: %w", name, err)
+		}
+		compared++
+	}
+	if compared == 0 {
+		return 0, fmt.Errorf("reports have no unadjusted scenario intersection")
+	}
+	return compared, nil
+}
+
+func indexedReport(
+	side string,
+	report Report,
+) (map[string]Result, map[string]struct{}, error) {
+	results := make(map[string]Result, len(report.Results))
+	for _, result := range report.Results {
+		if strings.TrimSpace(result.Name) == "" {
+			return nil, nil, fmt.Errorf("%s report contains a blank scenario name", side)
+		}
+		if _, duplicate := results[result.Name]; duplicate {
+			return nil, nil, fmt.Errorf(
+				"%s report contains duplicate scenario %q",
+				side,
+				result.Name,
+			)
+		}
+		results[result.Name] = result
+	}
+	skipped := make(map[string]struct{}, len(report.Skipped))
+	for _, name := range report.Skipped {
+		if strings.TrimSpace(name) == "" {
+			return nil, nil, fmt.Errorf("%s report contains a blank skipped scenario", side)
+		}
+		if _, duplicate := skipped[name]; duplicate {
+			return nil, nil, fmt.Errorf(
+				"%s report contains duplicate skipped scenario %q",
+				side,
+				name,
+			)
+		}
+		if _, duplicate := results[name]; duplicate {
+			return nil, nil, fmt.Errorf(
+				"%s report both executes and skips scenario %q",
+				side,
+				name,
+			)
+		}
+		skipped[name] = struct{}{}
+	}
+	return results, skipped, nil
+}
+
+func reportNames(
+	results map[string]Result,
+	skipped map[string]struct{},
+) map[string]struct{} {
+	names := make(map[string]struct{}, len(results)+len(skipped))
+	for name := range results {
+		names[name] = struct{}{}
+	}
+	for name := range skipped {
+		names[name] = struct{}{}
+	}
+	return names
+}
+
 // WriteReport writes deterministic English match-set evidence without query
 // values, connection strings, or backend condition text.
 func WriteReport(writer io.Writer, report Report) error {
