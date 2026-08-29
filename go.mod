@@ -7,12 +7,12 @@ require (
 	github.com/elastic/go-elasticsearch/v9 v9.5.1
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/go-sql-driver/mysql v1.8.1
-	github.com/imbrooklyn/weave v0.1.0-alpha.1.0.20260827162553-afbd6ad7c032
-	github.com/imbrooklyn/weave-adapters/elasticsearch v0.1.0-alpha.1
+	github.com/imbrooklyn/weave v0.1.0-alpha.1.0.20260829054240-e89df665411b
+	github.com/imbrooklyn/weave-adapters/elasticsearch v0.0.0-20260829101820-6d007b0c78ef
 	github.com/imbrooklyn/weave-adapters/goqu v0.0.0-20260828122433-e11008af9c41
 	github.com/imbrooklyn/weave-adapters/gorm v0.1.0-alpha.1.0.20260828122433-e11008af9c41
 	github.com/imbrooklyn/weave-adapters/gormgen v0.1.0-alpha.1.0.20260828122433-e11008af9c41
-	github.com/imbrooklyn/weave-adapters/ldap v0.1.0-alpha.1
+	github.com/imbrooklyn/weave-adapters/ldap v0.0.0-20260829101820-6d007b0c78ef
 	github.com/imbrooklyn/weave-adapters/memory v0.1.0-alpha.1.0.20260828122433-e11008af9c41
 	github.com/imbrooklyn/weave-adapters/mongo v0.0.0-20260828122433-e11008af9c41
 	github.com/jackc/pgx/v5 v5.6.0
@@ -27,7 +27,10 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
+	github.com/elastic/elastic-transport-go/v8 v8.9.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -39,6 +42,10 @@ require (
 	github.com/xdg-go/scram v1.2.0 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/otel v1.35.0 // indirect
+	go.opentelemetry.io/otel/metric v1.35.0 // indirect
+	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3 // indirect
 	golang.org/x/mod v0.39.0 // indirect

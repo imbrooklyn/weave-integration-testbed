@@ -56,6 +56,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 
 - The root module has a tidy dependency graph and no local replacements.
-  Released core and Adapter revisions are publicly resolvable; standalone
-  `GOWORK=off` LDAP and Elasticsearch verification additionally requires their
-  declared independent Adapter versions to become available.
+  Core and all Adapter revisions, including the independent LDAP and
+  Elasticsearch module paths, are pinned to publicly resolvable versions for
+  standalone `GOWORK=off` verification.
+- The source matrix uses the capability-aware core compiler-contract revision
+  required by the directory and search profiles.

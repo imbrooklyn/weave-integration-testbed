@@ -17,27 +17,24 @@ a production deployment template.
 
 ## Source revision matrix
 
-The root module contains no `replace` directives. Released dependencies are
-pinned to exact public VCS versions. The LDAP and Elasticsearch Adapter rows
-declare the independent versions required by this source tree; those versions
-must be available from the configured Go module source before the complete
-matrix is reproducible with `GOWORK=off`.
+The root module contains no `replace` directives. Dependencies are pinned to
+exact public VCS versions. Every version in the matrix is publicly resolvable
+and supports reproducing the complete module graph with `GOWORK=off`.
 
 | Module | Required version |
 | --- | --- |
-| `github.com/imbrooklyn/weave` | `v0.1.0-alpha.1.0.20260827162553-afbd6ad7c032` |
+| `github.com/imbrooklyn/weave` | `v0.1.0-alpha.1.0.20260829054240-e89df665411b` |
 | `github.com/imbrooklyn/weave-adapters/memory` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/gormgen` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/gorm` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/goqu` | `v0.0.0-20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/mongo` | `v0.0.0-20260828122433-e11008af9c41` |
-| `github.com/imbrooklyn/weave-adapters/ldap` | `v0.1.0-alpha.1` |
-| `github.com/imbrooklyn/weave-adapters/elasticsearch` | `v0.1.0-alpha.1` |
+| `github.com/imbrooklyn/weave-adapters/ldap` | `v0.0.0-20260829101820-6d007b0c78ef` |
+| `github.com/imbrooklyn/weave-adapters/elasticsearch` | `v0.0.0-20260829101820-6d007b0c78ef` |
 | `github.com/elastic/go-elasticsearch/v9` | `v9.5.1` |
 
-CI disables workspace resolution. Once every required version above is
-available, verify the same dependency boundary locally before starting
-services:
+CI disables workspace resolution. Verify the same dependency boundary locally
+before starting services:
 
 ```sh
 export GOWORK=off
@@ -45,10 +42,9 @@ go mod verify
 go mod tidy -diff
 ```
 
-At the current unreleased source state, `ldap/v0.1.0-alpha.1` and
-`elasticsearch/v0.1.0-alpha.1` must both be publicly resolvable before commands
-that load those packages can run with `GOWORK=off`. Do not add a committed
-filesystem replacement to bypass this boundary.
+The LDAP and Elasticsearch modules are independent module paths pinned to the
+same public source revision. Do not add a committed filesystem replacement to
+bypass this boundary.
 
 ## Quick start
 
