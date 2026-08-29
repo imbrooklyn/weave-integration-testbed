@@ -51,7 +51,7 @@ func run(arguments []string, output io.Writer) error {
 		&config.backend,
 		"backend",
 		"all",
-		"service selection: all, sql, mysql, postgres, or mongo",
+		"service selection: all, sql, mysql, postgres, mongo, directory, or ldap",
 	)
 	flags.StringVar(&config.root, "root", ".", "repository root containing testdata")
 	flags.DurationVar(&config.timeout, "timeout", defaultTimeout, "timeout per service")
@@ -89,6 +89,11 @@ func run(arguments []string, output io.Writer) error {
 			failures = append(failures, runErr)
 		}
 	}
+	if selection.ldap {
+		if runErr := runForLDAP(command, config, output); runErr != nil {
+			failures = append(failures, runErr)
+		}
+	}
 	if len(failures) != 0 {
 		return errors.Join(failures...)
 	}
@@ -102,6 +107,59 @@ func run(arguments []string, output io.Writer) error {
 		fmt.Fprintln(output, "sql: MySQL and PostgreSQL fixtures match")
 	}
 	return nil
+}
+
+func runForLDAP(
+	command string,
+	options options,
+	output io.Writer,
+) error {
+	config, err := testenv.LoadLDAPConfig()
+	if err != nil {
+		return fmt.Errorf("load LDAP configuration: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	defer cancel()
+	connection, err := testenv.WaitForLDAP(ctx, config, 500*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer testenv.CloseLDAP(connection)
+	server, err := testenv.ReadLDAPServerInfo(connection)
+	if err != nil {
+		return err
+	}
+
+	switch command {
+	case "health":
+		fmt.Fprintf(output, "ldap: healthy (OpenLDAP %s)\n", server.Version)
+		return nil
+	case "reset":
+		if err := testenv.ResetLDAP(connection); err != nil {
+			return err
+		}
+		fmt.Fprintln(output, "ldap: fixture reset")
+		return nil
+	case "verify":
+		count, err := verifyLDAPFixture(ctx, config)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(output, "ldap: fixture IDs verified (%d records, OpenLDAP %s)\n", count, server.Version)
+		return nil
+	case "check":
+		if err := testenv.ResetLDAP(connection); err != nil {
+			return err
+		}
+		count, err := verifyLDAPFixture(ctx, config)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(output, "ldap: fixture reset and verified (%d records, OpenLDAP %s)\n", count, server.Version)
+		return nil
+	default:
+		return fmt.Errorf("unsupported command %q", command)
+	}
 }
 
 func runForMongo(
@@ -257,19 +315,43 @@ func verifyMongoFixture(
 	return len(ids), nil
 }
 
+func verifyLDAPFixture(
+	ctx context.Context,
+	config testenv.LDAPConfig,
+) (int, error) {
+	ids, err := testenv.QueryLDAPIDs(
+		ctx,
+		config,
+		fixture.LDAPRecordsDN,
+		"(objectClass=weaveRecord)",
+	)
+	if err != nil {
+		return 0, fmt.Errorf("verify LDAP fixture")
+	}
+	if err := fixture.CompareIDs(ids, fixture.StableIDs()); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 type serviceSelection struct {
 	sqlBackends []testenv.Backend
 	mongo       bool
+	ldap        bool
 }
 
 func selectedServices(value string) (serviceSelection, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "all":
-		return serviceSelection{sqlBackends: testenv.SQLBackends(), mongo: true}, nil
+		return serviceSelection{
+			sqlBackends: testenv.SQLBackends(), mongo: true, ldap: true,
+		}, nil
 	case "sql":
 		return serviceSelection{sqlBackends: testenv.SQLBackends()}, nil
 	case "mongo":
 		return serviceSelection{mongo: true}, nil
+	case "directory", "ldap":
+		return serviceSelection{ldap: true}, nil
 	default:
 		backend, err := testenv.ParseBackend(value)
 		if err != nil {

@@ -1,0 +1,14 @@
+dn: dc=weave,dc=test
+objectClass: top
+objectClass: domain
+dc: weave
+
+dn: ou=records,dc=weave,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: records
+
+dn: ou=probes,dc=weave,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: probes

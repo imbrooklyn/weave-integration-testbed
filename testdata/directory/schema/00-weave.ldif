@@ -1,0 +1,13 @@
+dn: cn=weave,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: weave
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.1 NAME 'weaveRecordID' DESC 'Stable Weave testbed record identifier' EQUALITY caseExactMatch ORDERING caseExactOrderingMatch SUBSTR caseExactSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.2 NAME 'weaveNumber' DESC 'Always-present Weave testbed integer' EQUALITY integerMatch ORDERING integerOrderingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.3 NAME 'weaveText' DESC 'Always-present Weave testbed text' EQUALITY caseExactMatch ORDERING caseExactOrderingMatch SUBSTR caseExactSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.4 NAME 'weaveNullableNumber' DESC 'Optional Weave testbed integer' EQUALITY integerMatch ORDERING integerOrderingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.5 NAME 'weaveNullableText' DESC 'Optional Weave testbed text' EQUALITY caseExactMatch ORDERING caseExactOrderingMatch SUBSTR caseExactSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.6 NAME 'weaveEqualityOnlyText' DESC 'Equality-only Weave testbed text' EQUALITY caseExactMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.7 NAME 'weaveTags' DESC 'Multi-valued Weave testbed text' EQUALITY caseExactMatch SUBSTR caseExactSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.8 NAME 'weaveEmptyIA5' DESC 'Optional empty-capable Weave testbed IA5 text' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 SINGLE-VALUE )
+olcAttributeTypes: ( 1.3.6.1.4.1.55555.13.1.9 NAME 'weaveOctets' DESC 'Optional Weave testbed octets' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 SINGLE-VALUE )
+olcObjectClasses: ( 1.3.6.1.4.1.55555.13.2.1 NAME 'weaveRecord' DESC 'Weave LDAP integration record' SUP top STRUCTURAL MUST ( weaveRecordID $ weaveNumber $ weaveText $ weaveEqualityOnlyText ) MAY ( weaveNullableNumber $ weaveNullableText $ weaveTags $ weaveEmptyIA5 $ weaveOctets ) )

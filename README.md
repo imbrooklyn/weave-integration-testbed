@@ -2,9 +2,10 @@
 
 Weave Integration Testbed provides reproducible services, data, and executable
 checks for public Weave Adapter demonstrations and compatibility validation.
-The `sql` profile runs MySQL and PostgreSQL, while the `document` profile runs
-MongoDB. All paths use the canonical `weave/compilertest` records, Predicate
-scenarios, and expected record-ID sets.
+The `sql` profile runs MySQL and PostgreSQL, the `document` profile runs
+MongoDB, and the `directory` profile runs OpenLDAP. All Adapter paths use the
+canonical `weave/compilertest` records, Predicate scenarios, and expected
+record-ID sets.
 
 This repository is a local demonstration and validation environment. It is not
 a production deployment template.
@@ -14,6 +15,39 @@ a production deployment template.
 - Go 1.27 or newer
 - Docker Engine with Docker Compose
 
+## Source revision matrix
+
+The root module contains no `replace` directives. Released dependencies are
+pinned to exact public VCS versions. The LDAP row declares the independent
+Adapter version required by this source tree; that version must be available
+from the configured Go module source before the complete matrix is reproducible
+with `GOWORK=off`.
+
+| Module | Required version |
+| --- | --- |
+| `github.com/imbrooklyn/weave` | `v0.1.0-alpha.1.0.20260827162553-afbd6ad7c032` |
+| `github.com/imbrooklyn/weave-adapters/memory` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
+| `github.com/imbrooklyn/weave-adapters/gormgen` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
+| `github.com/imbrooklyn/weave-adapters/gorm` | `v0.1.0-alpha.1.0.20260828122433-e11008af9c41` |
+| `github.com/imbrooklyn/weave-adapters/goqu` | `v0.0.0-20260828122433-e11008af9c41` |
+| `github.com/imbrooklyn/weave-adapters/mongo` | `v0.0.0-20260828122433-e11008af9c41` |
+| `github.com/imbrooklyn/weave-adapters/ldap` | `v0.1.0-alpha.1` |
+
+CI disables workspace resolution. Once every required version above is
+available, verify the same dependency boundary locally before starting
+services:
+
+```sh
+export GOWORK=off
+go mod verify
+go mod tidy -diff
+```
+
+At the current unreleased source state, `ldap/v0.1.0-alpha.1` is not yet a
+publicly resolvable module revision. Commands that load the LDAP packages will
+therefore fail under `GOWORK=off` until that independent module version exists;
+do not add a committed filesystem replacement to bypass this boundary.
+
 ## Quick start
 
 Start all current services and wait for authenticated health checks:
@@ -22,15 +56,15 @@ Start all current services and wait for authenticated health checks:
 docker compose --profile all up --detach --wait --wait-timeout 180
 ```
 
-Reset and verify all three service fixtures:
+Reset and verify all four service fixtures:
 
 ```sh
 go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-Run the memory reference, SQL Demos, MongoDB Demo, and complete real-service
-matrix. `-count=1` prevents a previous service result from being reused through
-the Go test cache.
+Run the memory reference, SQL Demos, MongoDB Demo, LDAP Demo, and complete
+real-service matrix. `-count=1` prevents a previous service result from being
+reused through the Go test cache.
 
 ```sh
 go run ./cmd/memory --timeout=2m
@@ -38,6 +72,7 @@ go run ./cmd/gormgen --backend=all --timeout=2m
 go run ./cmd/gorm --backend=all --timeout=2m
 go run ./cmd/goqu --backend=all --timeout=2m
 go run ./cmd/mongo --timeout=2m
+go run ./cmd/ldap --timeout=2m
 go test -race -count=1 -tags=integration ./integration
 ```
 
@@ -61,6 +96,7 @@ See [cmd/README.md](cmd/README.md) for per-Adapter details.
 | `cmd/gorm` | MySQL, PostgreSQL | typed GORM fields and `DB.Where` | 30 passed, 1 skipped |
 | `cmd/goqu` | MySQL, PostgreSQL | typed goqu fields and prepared `database/sql` queries | 30 passed, 1 skipped |
 | `cmd/mongo` | MongoDB 6.0+ | typed Mongo paths and `Collection.Find` with ordered BSON | 31 passed, 0 skipped |
+| `cmd/ldap` | OpenLDAP 2.6.10 | typed Schema descriptors and `SearchRequest.Filter` | 26 passed, 0 skipped |
 
 The commands print each scenario name and its final sorted record-ID set. They
 do not compare backend query text or serialize credentials and stored text into
@@ -71,8 +107,9 @@ service.
 ## Environment commands
 
 `testbedctl` accepts `--backend=all`, `--backend=sql`, `--backend=mysql`,
-`--backend=postgres`, or `--backend=mongo`. The default `all` now selects every
-current service. Each operation has a finite per-service timeout.
+`--backend=postgres`, `--backend=mongo`, `--backend=directory`, or
+`--backend=ldap`. The default `all` selects every current service. Each
+operation has a finite per-service timeout.
 
 ```sh
 go run ./cmd/testbedctl health --backend=all --timeout=2m
@@ -81,8 +118,9 @@ go run ./cmd/testbedctl verify --backend=all --timeout=2m
 go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-- `health` performs an authenticated ping and reports the real MongoDB version.
-- `reset` replays SQL scripts or inserts fresh ordered BSON fixture documents.
+- `health` performs authenticated service checks and reports real MongoDB and
+  pinned OpenLDAP identities.
+- `reset` replays SQL scripts or inserts fresh ordered BSON and LDAP entries.
 - `verify` checks the stable record-ID set.
 - `check` resets and verifies each selected service. When both SQL backends are
   selected, it also compares every shared SQL fixture column without logging
@@ -95,10 +133,11 @@ go run ./cmd/testbedctl check --backend=all --timeout=2m
 | `sql` | MySQL | `mysql:8.0.40` | `127.0.0.1:33306` | `weave_testbed` |
 | `sql` | PostgreSQL | `postgres:15.12-alpine` | `127.0.0.1:35432` | `weave_testbed` |
 | `document` | MongoDB | `mongo:6.0.28` | `127.0.0.1:37017` | `weave_testbed` |
+| `directory` | OpenLDAP | `bitnamilegacy/openldap:2.6.10-debian-12-r4@sha256:966fd39ed25813890e9bd57dac56def163bbcfe64967e0bae59ab018d505bd93` | `127.0.0.1:3389` | `dc=weave,dc=test` |
 
-`all` enables both current profiles. Only service ports are published and each
-is bound to the host loopback interface. Storage uses container-local temporary
-filesystems, so stopping the Compose project removes test data.
+`all` enables all three current profiles. Only service ports are published and
+each is bound to the host loopback interface. Storage remains container-local,
+so removing the Compose project removes test data.
 
 The MongoDB profile can run another fixed compatible image without editing the
 Compose file. The real-service matrix validates both the 6.0 baseline and the
@@ -115,12 +154,24 @@ never be reused for production or a network-accessible database. Copy
 `.env.example` to `.env` to change local endpoints or credentials; `.env` is
 ignored by Git.
 
+The directory profile uses the same public local-only password for
+`cn=admin,dc=weave,dc=test`, disables anonymous binding, and exposes only the
+loopback port. The pinned `bitnamilegacy` image is an immutable validation
+fixture, receives no security updates, and is not a deployment recommendation.
+
 ## Stable fixture
 
 Every service exposes the six canonical IDs `r01` through `r06`. SQL DDL and
 seed files include the wider testbed row shape. MongoDB `records.json` stores
 the canonical scalar fields as Extended JSON and is checked structurally
 against documents generated from `compilertest.Records()`.
+
+The directory profile loads the committed custom Schema and base LDIF, then
+materializes canonical entries directly from `compilertest.Records()` on every
+reset. Its optional nullable attributes collapse explicit null and missing to
+LDAP absence. LDAP-only probes cover a multi-valued attribute, a present empty
+IA5 value, an absent IA5 attribute, arbitrary octets containing NUL, literal
+filter delimiters, Unicode, and an injection-like string.
 
 The Mongo Demo and automated tests do not own a second scenario or expected-ID
 list: both execute `compilertest.Scenarios`, and the runtime Mongo documents are
@@ -155,6 +206,8 @@ testdata/postgres/002_seed.sql
 testdata/mongo/records.json
 testdata/mongo/regex_records.json
 testdata/mongo/init.js
+testdata/directory/schema/00-weave.ldif
+testdata/directory/ldif/00-base.ldif
 ```
 
 ## MongoDB semantic checks
@@ -184,6 +237,33 @@ stored string. Failed compilation returns a nil document and redacted
 structured error. Repeated and concurrent compilation must produce identical
 ordered BSON bytes and final IDs.
 
+## LDAP semantic checks
+
+The LDAP harness uses go-ldap v3.4.14, verifies LDAPv3 and the custom attribute
+OIDs through the live root DSE/subschema, resets entries through authenticated
+LDAP operations, and passes each canonical `Filter.String()` directly to
+`NewSearchRequest`. The Compose manifest and container `slapd` binary are fixed
+at OpenLDAP 2.6.10.
+
+The live Compiler contract executes the 26 canonical cases applicable to the
+Adapter's exact global and field capabilities. Dedicated checks cover equality,
+integer ordering, presence, substring matching, empty IA5 equality, a
+multi-valued Expr, absence-safe NEQ/NotIn, NOT match-set complements, all four
+Logic forms, three-level nesting, Schema-bound Native, validated Expr, stable
+DN/ID sets, and concurrent compilation/search.
+
+Special-value searches prove that `*`, `(`, `)`, backslash, NUL, Unicode, and
+an injection-like string remain escaped assertion values. IsNull, LT, GT, and
+standard operators on the multi-valued descriptor return zero filters with
+structured errors and are never sent to the server as approximations. The
+typed descriptors must agree with the deployed attribute OIDs, `SINGLE-VALUE`
+flags, syntaxes, and equality/ordering/substring matching rules.
+
+Real driver-failure checks use a rejected bind and a malformed search filter
+to verify that wrapper errors omit credentials, bind identities, and filter
+text. Successful filters remain caller-owned query data and are not printed by
+the harness.
+
 ## Generated GORM Gen fixture
 
 `internal/gormgenmodel` and `internal/gormgenquery` are generated by
@@ -203,6 +283,12 @@ Run only the document contract against a healthy MongoDB service:
 
 ```sh
 go test -race -count=1 -tags=integration -run '^TestMongo' ./integration
+```
+
+Run only the directory contract against a healthy OpenLDAP service:
+
+```sh
+go test -race -count=1 -tags=integration -run '^TestLDAP' ./integration
 ```
 
 Run only the full cross-model ID-set comparison with all current services:

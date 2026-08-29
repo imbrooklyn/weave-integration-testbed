@@ -109,8 +109,51 @@ services:
       start_period: 20s
     networks: [document]
 
+  openldap:
+    image: "${WEAVE_TESTBED_LDAP_IMAGE:-bitnamilegacy/openldap:2.6.10-debian-12-r4@sha256:966fd39ed25813890e9bd57dac56def163bbcfe64967e0bae59ab018d505bd93}"
+    profiles: [directory, all]
+    restart: "no"
+    environment:
+      LDAP_ROOT: "${WEAVE_TESTBED_LDAP_BASE_DN:-dc=weave,dc=test}"
+      LDAP_ADMIN_USERNAME: "${WEAVE_TESTBED_LDAP_ADMIN_USER:-admin}"
+      LDAP_ADMIN_PASSWORD: "${WEAVE_TESTBED_LDAP_ADMIN_PASSWORD:-weave_demo_only}"
+      LDAP_ALLOW_ANON_BINDING: "no"
+      LDAP_SKIP_DEFAULT_TREE: "yes"
+      LDAP_ADD_SCHEMAS: "yes"
+      LDAP_EXTRA_SCHEMAS: "cosine,inetorgperson,nis"
+      LDAP_CUSTOM_SCHEMA_DIR: /schemas
+      LDAP_CUSTOM_LDIF_DIR: /ldifs
+      LDAP_LOGLEVEL: "0"
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${WEAVE_TESTBED_LDAP_PORT:-3389}:1389"
+    volumes:
+      - type: bind
+        source: ./testdata/directory/schema
+        target: /schemas
+        read_only: true
+      - type: bind
+        source: ./testdata/directory/ldif
+        target: /ldifs
+        read_only: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          ldapsearch -x -LLL -H ldap://127.0.0.1:1389
+          -D "cn=$${LDAP_ADMIN_USERNAME},$${LDAP_ROOT}"
+          -w "$${LDAP_ADMIN_PASSWORD}" -b "$${LDAP_ROOT}" -s base
+          '(objectClass=*)' dn >/dev/null
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    networks: [directory]
+
 networks:
   sql:
     driver: bridge
   document:
+    driver: bridge
+  directory:
     driver: bridge

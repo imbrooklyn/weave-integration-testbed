@@ -1,10 +1,12 @@
 # Runnable Adapter Demos
 
-The five Adapter commands in this directory execute the same canonical
+The six Adapter commands in this directory execute the same canonical
 Predicate scenarios and expected record-ID sets as the automated integration
 tests. They are read-only query demonstrations. SQL schema and seed ownership
 remains in `testdata/mysql` and `testdata/postgres`; MongoDB initial data remains
-in `testdata/mongo` and is checked against the shared compiler fixture.
+in `testdata/mongo` and is checked against the shared compiler fixture. The
+OpenLDAP custom Schema and base LDIF remain in `testdata/directory`; runtime
+entries are generated from the same shared fixture.
 
 ## Environment lifecycle
 
@@ -23,6 +25,7 @@ go run ./cmd/gormgen --backend=all --timeout=2m
 go run ./cmd/gorm --backend=all --timeout=2m
 go run ./cmd/goqu --backend=all --timeout=2m
 go run ./cmd/mongo --timeout=2m
+go run ./cmd/ldap --timeout=2m
 ```
 
 Always stop the local services when finished:
@@ -33,6 +36,9 @@ docker compose --profile all down --volumes --remove-orphans
 
 To run only MongoDB, replace `all` with `document` in the Compose commands and
 use `testbedctl --backend=mongo`.
+
+To run only OpenLDAP, replace `all` with `directory` and use
+`testbedctl --backend=ldap`.
 
 ## What each Demo proves
 
@@ -83,10 +89,30 @@ Dedicated integration tests, rather than the Demo output, prove raw `$ne` and
 and value injection boundaries, redacted zero-document failures, and concurrent
 ordered-BSON determinism.
 
+### ldap
+
+The LDAP Demo creates immutable typed descriptors that match the committed
+custom Schema, compiles deterministic RFC 4515 filters, and passes each filter
+to a real OpenLDAP 2.6.10 search. The exact capability and field-applicability
+intersection produces 26 canonical match sets without a skip. Explicit null
+and missing both map to absent attributes, while IsNull, LT, and GT remain
+unsupported instead of being approximated.
+
+The Demo output identifies the pinned server profile:
+
+```text
+ldap/openldap-2.6.10: 26 passed, 0 skipped
+```
+
+Dedicated integration tests cover live Schema OIDs, single- and multi-valued
+attributes, present empty IA5 and absent values, integer ordering, substring
+rules, presence guards, all four Logic forms, Native/Expr, stable DNs and IDs,
+RFC 4515 escaping including NUL, and structured unsupported-operation errors.
+
 ## Options and exit status
 
 `gormgen`, `gorm`, and `goqu` accept `--backend=all`, `--backend=mysql`, or
-`--backend=postgres`. All five Adapter Demos accept a positive `--timeout`; SQL
+`--backend=postgres`. All six Adapter Demos accept a positive `--timeout`; SQL
 timeouts apply per backend.
 
 - Exit 0: every executed match set equals its canonical expected IDs.
@@ -94,6 +120,6 @@ timeouts apply per backend.
 - Exit 2: command-line usage is invalid.
 
 Each command cancels its timeout context and closes any client or database
-pool. Output contains scenario names, fixture IDs, and the non-secret MongoDB
-version, but not credentials, connection strings, stored text values, generated
-SQL, or serialized BSON filters.
+pool. Output contains scenario names, fixture IDs, and non-secret MongoDB or
+OpenLDAP identities, but not credentials, connection strings, stored text
+values, generated SQL, serialized BSON filters, or LDAP filter text.

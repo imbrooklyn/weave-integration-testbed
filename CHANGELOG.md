@@ -30,3 +30,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   injection boundaries, redacted failures, and concurrent ordered BSON.
 - Exact match-set differential checks across MongoDB, memory, GORM Gen, GORM,
   and goqu within their 28-scenario unadjusted storage intersection.
+- A `directory` Compose profile pinned to the OpenLDAP 2.6.10 multi-architecture
+  manifest digest, with authenticated health checks, custom Schema and base
+  LDIF, deterministic entries generated from `compilertest.Records()`, and
+  loopback-only access.
+- A runnable LDAP Demo and real-server Compiler contract covering the 26
+  applicable canonical match sets, exact field applicability, absence guards,
+  empty and multi-valued attributes, all four Logic forms, Native/Expr, RFC 4515
+  escaping including NUL and injection-like values, structured unsupported
+  operations, stable DNs/IDs, and concurrent compilation/search.
+- Real LDAP driver-failure checks proving that rejected binds and malformed
+  filters do not escape through wrapper errors, plus CI verification of the
+  container's actual `slapd` version.
+
+### Changed
+
+- The root module has a tidy dependency graph and no local replacements.
+  Released core and Adapter revisions are publicly resolvable; standalone
+  `GOWORK=off` LDAP verification additionally requires the declared independent
+  LDAP Adapter version to become available.

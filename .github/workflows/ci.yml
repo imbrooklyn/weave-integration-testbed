@@ -118,9 +118,44 @@ jobs:
         if: always()
         run: docker compose --profile document down --volumes --remove-orphans
 
+  directory:
+    name: OpenLDAP 2.6.10
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      COMPOSE_PROJECT_NAME: weave-directory-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start OpenLDAP
+        run: docker compose --profile directory up --detach --wait --wait-timeout 180
+      - name: Verify the OpenLDAP binary version
+        run: >-
+          docker compose --profile directory exec -T openldap slapd -VV 2>&1 |
+          grep -F 'OpenLDAP: slapd 2.6.10'
+      - name: Check LDAP fixture replay
+        run: |
+          go run ./cmd/testbedctl check --backend=ldap --timeout=2m
+          go run ./cmd/testbedctl check --backend=ldap --timeout=2m
+      - name: Run LDAP Adapter demo
+        run: go run ./cmd/ldap --timeout=2m
+      - name: Run real LDAP contract
+        run: >-
+          go test -race -count=1 -tags=integration
+          -run '^TestLDAP' ./integration
+      - name: Stop OpenLDAP
+        if: always()
+        run: docker compose --profile directory down --volumes --remove-orphans
+
   cross-model:
     name: Cross-model match sets
-    needs: [sql, document]
+    needs: [sql, document, directory]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
