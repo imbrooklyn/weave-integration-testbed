@@ -3,9 +3,9 @@
 Weave Integration Testbed provides reproducible services, data, and executable
 checks for public Weave Adapter demonstrations and compatibility validation.
 The `sql` profile runs MySQL and PostgreSQL, the `document` profile runs
-MongoDB, and the `directory` profile runs OpenLDAP. All Adapter paths use the
-canonical `weave/compilertest` records, Predicate scenarios, and expected
-record-ID sets.
+MongoDB, the `directory` profile runs OpenLDAP, and the `search` profile runs
+Elasticsearch. All Adapter paths use the canonical `weave/compilertest`
+records, Predicate scenarios, and expected record-ID sets.
 
 This repository is a local demonstration and validation environment. It is not
 a production deployment template.
@@ -18,10 +18,10 @@ a production deployment template.
 ## Source revision matrix
 
 The root module contains no `replace` directives. Released dependencies are
-pinned to exact public VCS versions. The LDAP row declares the independent
-Adapter version required by this source tree; that version must be available
-from the configured Go module source before the complete matrix is reproducible
-with `GOWORK=off`.
+pinned to exact public VCS versions. The LDAP and Elasticsearch Adapter rows
+declare the independent versions required by this source tree; those versions
+must be available from the configured Go module source before the complete
+matrix is reproducible with `GOWORK=off`.
 
 | Module | Required version |
 | --- | --- |
@@ -32,6 +32,8 @@ with `GOWORK=off`.
 | `github.com/imbrooklyn/weave-adapters/goqu` | `v0.0.0-20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/mongo` | `v0.0.0-20260828122433-e11008af9c41` |
 | `github.com/imbrooklyn/weave-adapters/ldap` | `v0.1.0-alpha.1` |
+| `github.com/imbrooklyn/weave-adapters/elasticsearch` | `v0.1.0-alpha.1` |
+| `github.com/elastic/go-elasticsearch/v9` | `v9.5.1` |
 
 CI disables workspace resolution. Once every required version above is
 available, verify the same dependency boundary locally before starting
@@ -43,28 +45,28 @@ go mod verify
 go mod tidy -diff
 ```
 
-At the current unreleased source state, `ldap/v0.1.0-alpha.1` is not yet a
-publicly resolvable module revision. Commands that load the LDAP packages will
-therefore fail under `GOWORK=off` until that independent module version exists;
-do not add a committed filesystem replacement to bypass this boundary.
+At the current unreleased source state, `ldap/v0.1.0-alpha.1` and
+`elasticsearch/v0.1.0-alpha.1` must both be publicly resolvable before commands
+that load those packages can run with `GOWORK=off`. Do not add a committed
+filesystem replacement to bypass this boundary.
 
 ## Quick start
 
-Start all current services and wait for authenticated health checks:
+Start all current services and wait for health checks:
 
 ```sh
-docker compose --profile all up --detach --wait --wait-timeout 180
+docker compose --profile all up --detach --wait --wait-timeout 240
 ```
 
-Reset and verify all four service fixtures:
+Reset and verify all five service fixtures:
 
 ```sh
 go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-Run the memory reference, SQL Demos, MongoDB Demo, LDAP Demo, and complete
-real-service matrix. `-count=1` prevents a previous service result from being
-reused through the Go test cache.
+Run the memory reference, SQL Demos, MongoDB Demo, LDAP Demo, Elasticsearch
+Demo, and complete real-service matrix. `-count=1` prevents a previous service
+result from being reused through the Go test cache.
 
 ```sh
 go run ./cmd/memory --timeout=2m
@@ -73,6 +75,7 @@ go run ./cmd/gorm --backend=all --timeout=2m
 go run ./cmd/goqu --backend=all --timeout=2m
 go run ./cmd/mongo --timeout=2m
 go run ./cmd/ldap --timeout=2m
+go run ./cmd/elasticsearch --timeout=3m
 go test -race -count=1 -tags=integration ./integration
 ```
 
@@ -89,7 +92,7 @@ See [cmd/README.md](cmd/README.md) for per-Adapter details.
 
 ## Runnable Adapter matrix
 
-| Demo | Backend | Public execution path | Canonical result |
+| Demo | Backend | Public execution path | Result |
 | --- | --- | --- | --- |
 | `cmd/memory` | In-process | memory typed fields and `Condition.Match` | 31 passed, 0 skipped |
 | `cmd/gormgen` | MySQL, PostgreSQL | generated DAO `Where` | 30 passed, 1 skipped |
@@ -97,6 +100,7 @@ See [cmd/README.md](cmd/README.md) for per-Adapter details.
 | `cmd/goqu` | MySQL, PostgreSQL | typed goqu fields and prepared `database/sql` queries | 30 passed, 1 skipped |
 | `cmd/mongo` | MongoDB 6.0+ | typed Mongo paths and `Collection.Find` with ordered BSON | 31 passed, 0 skipped |
 | `cmd/ldap` | OpenLDAP 2.6.10 | typed Schema descriptors and `SearchRequest.Filter` | 26 passed, 0 skipped |
+| `cmd/elasticsearch` | Elasticsearch 9.5.2 / Lucene 10.5.1 | official typed Query passed to `TypedClient.Search` | 31 canonical plus 16 search seams, 0 skipped |
 
 The commands print each scenario name and its final sorted record-ID set. They
 do not compare backend query text or serialize credentials and stored text into
@@ -108,8 +112,9 @@ service.
 
 `testbedctl` accepts `--backend=all`, `--backend=sql`, `--backend=mysql`,
 `--backend=postgres`, `--backend=mongo`, `--backend=directory`, or
-`--backend=ldap`. The default `all` selects every current service. Each
-operation has a finite per-service timeout.
+`--backend=ldap`, `--backend=search`, or `--backend=elasticsearch`. The default
+`all` selects every current service. Each operation has a finite per-service
+timeout.
 
 ```sh
 go run ./cmd/testbedctl health --backend=all --timeout=2m
@@ -118,9 +123,10 @@ go run ./cmd/testbedctl verify --backend=all --timeout=2m
 go run ./cmd/testbedctl check --backend=all --timeout=2m
 ```
 
-- `health` performs authenticated service checks and reports real MongoDB and
-  pinned OpenLDAP identities.
-- `reset` replays SQL scripts or inserts fresh ordered BSON and LDAP entries.
+- `health` performs service checks and reports real MongoDB, pinned OpenLDAP,
+  and exact Elasticsearch/Lucene identities.
+- `reset` replays SQL scripts, inserts fresh ordered BSON and LDAP entries, or
+  recreates the explicit Elasticsearch mapping and bulk fixture.
 - `verify` checks the stable record-ID set.
 - `check` resets and verifies each selected service. When both SQL backends are
   selected, it also compares every shared SQL fixture column without logging
@@ -134,8 +140,9 @@ go run ./cmd/testbedctl check --backend=all --timeout=2m
 | `sql` | PostgreSQL | `postgres:15.12-alpine` | `127.0.0.1:35432` | `weave_testbed` |
 | `document` | MongoDB | `mongo:6.0.28` | `127.0.0.1:37017` | `weave_testbed` |
 | `directory` | OpenLDAP | `bitnamilegacy/openldap:2.6.10-debian-12-r4@sha256:966fd39ed25813890e9bd57dac56def163bbcfe64967e0bae59ab018d505bd93` | `127.0.0.1:3389` | `dc=weave,dc=test` |
+| `search` | Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:9.5.2@sha256:9c1e1afc2bda921b35025e21c72ec6e392266995aa35ad6a47887363592718be` | `127.0.0.1:39200` | `weave-semantic-records` |
 
-`all` enables all three current profiles. Only service ports are published and
+`all` enables all four current profiles. Only service ports are published and
 each is bound to the host loopback interface. Storage remains container-local,
 so removing the Compose project removes test data.
 
@@ -159,6 +166,11 @@ The directory profile uses the same public local-only password for
 loopback port. The pinned `bitnamilegacy` image is an immutable validation
 fixture, receives no security updates, and is not a deployment recommendation.
 
+The search profile disables Elasticsearch security only inside this isolated,
+loopback-published fixture. It pins the multi-platform server image manifest,
+verifies Elasticsearch 9.5.2 and Lucene 10.5.1, and uses a tmpfs data
+directory. It is not suitable for a shared host or production deployment.
+
 ## Stable fixture
 
 Every service exposes the six canonical IDs `r01` through `r06`. SQL DDL and
@@ -172,6 +184,15 @@ reset. Its optional nullable attributes collapse explicit null and missing to
 LDAP absence. LDAP-only probes cover a multi-valued attribute, a present empty
 IA5 value, an absent IA5 attribute, arbitrary octets containing NUL, literal
 filter delimiters, Unicode, and an injection-like string.
+
+The search profile recreates one strict index from committed settings, an
+explicit mapping, and NDJSON. Fixture validation compares its canonical fields
+with `compilertest.Records()`; Demo and integration code share the same mapping,
+data loader, and Elasticsearch seam-case runner instead of copying the
+canonical scenario contract. Extra fields cover keyword and analyzed text,
+long/double/date/boolean scalars, arrays, source null, missing keys, an empty
+string, an empty array, same-field `null_value`, and companion NULL/Value
+markers.
 
 The Mongo Demo and automated tests do not own a second scenario or expected-ID
 list: both execute `compilertest.Scenarios`, and the runtime Mongo documents are
@@ -192,9 +213,9 @@ not replace or duplicate canonical Predicate scenarios.
 SQL materializes explicit null and an unavailable field as SQL `NULL`. Its
 canonical `explicit null only` and nullable-membership results therefore use
 the documented missing-collapsed sets, and `missing state` is skipped. MongoDB
-and memory preserve the states and execute all 31 scenarios. The remaining 28
-unadjusted scenarios are compared exactly across MongoDB, GORM Gen, GORM, and
-goqu by final ID set.
+memory, and Elasticsearch preserve the states and execute all 31 scenarios.
+The remaining 28 unadjusted scenarios are compared exactly across MongoDB,
+GORM Gen, GORM, and goqu by final ID set.
 
 The committed fixture sources are:
 
@@ -208,6 +229,9 @@ testdata/mongo/regex_records.json
 testdata/mongo/init.js
 testdata/directory/schema/00-weave.ldif
 testdata/directory/ldif/00-base.ldif
+testdata/elasticsearch/settings.json
+testdata/elasticsearch/mapping.json
+testdata/elasticsearch/records.ndjson
 ```
 
 ## MongoDB semantic checks
@@ -264,6 +288,42 @@ to verify that wrapper errors omit credentials, bind identities, and filter
 text. Successful filters remain caller-owned query data and are not printed by
 the harness.
 
+## Elasticsearch semantic checks
+
+The search harness uses go-elasticsearch v9.5.1 and refuses any server identity
+other than Elasticsearch 9.5.2 with Lucene 10.5.1. It creates a strict explicit
+mapping using the `strict_date_optional_time_nanos` date format, a lowercase
+keyword normalizer, a wildcard field, same-field `null_value` sentinels, and
+companion marker fields. The Adapter Compiler receives only immutable
+declarations constructed by the harness; it never discovers cluster mappings
+or owns the client, transport, index, context, credentials, or request builder.
+
+The live contract executes all 31 canonical match sets plus 16 shared search
+seams. Coverage includes EQ/NEQ, order, In/NotIn, numeric Between, all four
+Logic forms, constants, exists guards, source null versus indexed existence,
+missing, empty string, empty array, both NULL-marker strategies, root Native,
+upstream Expr, analyzed match queries, depth-eight nesting, stable IDs, and
+redacted stable-first validation errors. Date intervals use GTE and LTE because
+the locked core API exposes Between only for numeric values.
+
+Literal Contains and HasSuffix escape caller `*`, `?`, and backslash before
+adding Adapter-owned wildcard operators; Unicode remains literal. HasPrefix
+uses a typed prefix query. With `search.allow_expensive_queries=false`, keyword
+pattern capabilities are removed and a raw expensive Expr is confirmed to fail
+at the real server. After the setting is explicitly enabled and verified, the
+expensive Profile executes keyword wildcard and prefix cases. The wildcard
+mapping retains its standard literal-pattern capabilities in the strict
+Profile.
+
+Analyzed, multi-valued, nested, incomplete-null, and disallowed-expensive
+declarations lose standard capabilities instead of receiving approximate
+lowering. Full-text, nested, geo, script, and query-string behavior remains an
+explicit upstream Expr or future Elasticsearch-specific helper concern.
+
+Failed Elasticsearch requests are wrapped without endpoint text, query JSON,
+response bodies, stored values, or credentials. Successful typed queries
+remain caller-owned request data and are not printed by the harness.
+
 ## Generated GORM Gen fixture
 
 `internal/gormgenmodel` and `internal/gormgenquery` are generated by
@@ -291,6 +351,13 @@ Run only the directory contract against a healthy OpenLDAP service:
 go test -race -count=1 -tags=integration -run '^TestLDAP' ./integration
 ```
 
+Run only the search contract against a healthy Elasticsearch service:
+
+```sh
+go test -race -count=1 -tags=integration \
+  -run '^TestElasticsearch' ./integration
+```
+
 Run only the full cross-model ID-set comparison with all current services:
 
 ```sh
@@ -299,8 +366,8 @@ go test -race -count=1 -tags=integration \
 ```
 
 The complete package also retains the SQL matrix and goqu compiler contract.
-No test treats BSON snapshots, generated SQL, or query text as a substitute for
-real backend match sets.
+No test treats BSON snapshots, generated SQL, typed-query JSON, or query text as
+a substitute for real backend match sets.
 
 ## Project boundaries
 
@@ -319,3 +386,11 @@ images and downloaded Go modules remain independent third-party software under
 their respective licenses and notices; this project does not relicense them.
 Review the terms shipped with the exact third-party version before
 redistributing those artifacts.
+
+The locked go-elasticsearch client is Apache-2.0 software. That does not apply
+the same license to the Elasticsearch server distribution: Elastic documents
+the default distribution under the Elastic License 2.0, and the pinned 9.5.2
+image ships `/usr/share/elasticsearch/LICENSE.txt` and `NOTICE.txt`. Compose
+downloads and runs that image for local validation; this repository does not
+copy or redistribute its layers. Review the [Elastic licensing FAQ](https://www.elastic.co/pricing/faq/licensing)
+and the files shipped in the image before any redistribution or non-test use.

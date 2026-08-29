@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	goelasticsearch "github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9/typedapi/types"
 	"github.com/imbrooklyn/weave-integration-testbed/internal/fixture"
 	"github.com/imbrooklyn/weave-integration-testbed/internal/testenv"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -51,7 +53,7 @@ func run(arguments []string, output io.Writer) error {
 		&config.backend,
 		"backend",
 		"all",
-		"service selection: all, sql, mysql, postgres, mongo, directory, or ldap",
+		"service selection: all, sql, mysql, postgres, mongo, directory, ldap, search, or elasticsearch",
 	)
 	flags.StringVar(&config.root, "root", ".", "repository root containing testdata")
 	flags.DurationVar(&config.timeout, "timeout", defaultTimeout, "timeout per service")
@@ -94,6 +96,11 @@ func run(arguments []string, output io.Writer) error {
 			failures = append(failures, runErr)
 		}
 	}
+	if selection.elasticsearch {
+		if runErr := runForElasticsearch(command, config, output); runErr != nil {
+			failures = append(failures, runErr)
+		}
+	}
 	if len(failures) != 0 {
 		return errors.Join(failures...)
 	}
@@ -107,6 +114,79 @@ func run(arguments []string, output io.Writer) error {
 		fmt.Fprintln(output, "sql: MySQL and PostgreSQL fixtures match")
 	}
 	return nil
+}
+
+func runForElasticsearch(
+	command string,
+	options options,
+	output io.Writer,
+) error {
+	config, err := testenv.LoadElasticsearchConfig()
+	if err != nil {
+		return fmt.Errorf("load Elasticsearch configuration: %w", err)
+	}
+	client, err := testenv.OpenElasticsearch(config)
+	if err != nil {
+		return err
+	}
+	defer testenv.CloseElasticsearch(client)
+	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	defer cancel()
+	if err := testenv.WaitForElasticsearch(ctx, client, 500*time.Millisecond); err != nil {
+		return err
+	}
+	server, err := testenv.ReadElasticsearchServerInfo(ctx, client)
+	if err != nil {
+		return err
+	}
+
+	switch command {
+	case "health":
+		fmt.Fprintf(
+			output,
+			"elasticsearch: healthy (Elasticsearch %s, Lucene %s)\n",
+			server.Version,
+			server.LuceneVersion,
+		)
+		return nil
+	case "reset":
+		if err := testenv.ResetElasticsearch(ctx, client, config, options.root); err != nil {
+			return err
+		}
+		fmt.Fprintln(output, "elasticsearch: fixture reset")
+		return nil
+	case "verify":
+		count, err := verifyElasticsearchFixture(ctx, client, config)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(
+			output,
+			"elasticsearch: fixture IDs verified (%d records, Elasticsearch %s, Lucene %s)\n",
+			count,
+			server.Version,
+			server.LuceneVersion,
+		)
+		return nil
+	case "check":
+		if err := testenv.ResetElasticsearch(ctx, client, config, options.root); err != nil {
+			return err
+		}
+		count, err := verifyElasticsearchFixture(ctx, client, config)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(
+			output,
+			"elasticsearch: fixture reset and verified (%d records, Elasticsearch %s, Lucene %s)\n",
+			count,
+			server.Version,
+			server.LuceneVersion,
+		)
+		return nil
+	default:
+		return fmt.Errorf("unsupported command %q", command)
+	}
 }
 
 func runForLDAP(
@@ -334,10 +414,30 @@ func verifyLDAPFixture(
 	return len(ids), nil
 }
 
+func verifyElasticsearchFixture(
+	ctx context.Context,
+	client *goelasticsearch.TypedClient,
+	config testenv.ElasticsearchConfig,
+) (int, error) {
+	if err := testenv.VerifyElasticsearchIndexContract(ctx, client, config); err != nil {
+		return 0, err
+	}
+	query := &types.Query{MatchAll: &types.MatchAllQuery{}}
+	ids, err := testenv.QueryElasticsearchIDs(ctx, client, config, query)
+	if err != nil {
+		return 0, err
+	}
+	if err := fixture.CompareIDs(ids, fixture.StableIDs()); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 type serviceSelection struct {
-	sqlBackends []testenv.Backend
-	mongo       bool
-	ldap        bool
+	sqlBackends   []testenv.Backend
+	mongo         bool
+	ldap          bool
+	elasticsearch bool
 }
 
 func selectedServices(value string) (serviceSelection, error) {
@@ -345,6 +445,7 @@ func selectedServices(value string) (serviceSelection, error) {
 	case "all":
 		return serviceSelection{
 			sqlBackends: testenv.SQLBackends(), mongo: true, ldap: true,
+			elasticsearch: true,
 		}, nil
 	case "sql":
 		return serviceSelection{sqlBackends: testenv.SQLBackends()}, nil
@@ -352,6 +453,8 @@ func selectedServices(value string) (serviceSelection, error) {
 		return serviceSelection{mongo: true}, nil
 	case "directory", "ldap":
 		return serviceSelection{ldap: true}, nil
+	case "search", "elasticsearch":
+		return serviceSelection{elasticsearch: true}, nil
 	default:
 		backend, err := testenv.ParseBackend(value)
 		if err != nil {

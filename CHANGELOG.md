@@ -42,10 +42,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Real LDAP driver-failure checks proving that rejected binds and malformed
   filters do not escape through wrapper errors, plus CI verification of the
   container's actual `slapd` version.
+- A `search` Compose profile fixed to the Elasticsearch 9.5.2 multi-platform
+  image manifest, with an exact Elasticsearch/Lucene health contract,
+  loopback-only access, tmpfs storage, explicit strict mapping and settings,
+  replayable six-record NDJSON, and deterministic reset/verification commands.
+- A runnable Elasticsearch Demo and race-enabled real-server Compiler contract
+  using go-elasticsearch v9.5.1, all 31 canonical match sets, 16 shared search
+  seams, typed scalar and mapping coverage, explicit null/missing/empty states,
+  exists guards, all four Logic forms, Native/Expr, literal wildcard escaping,
+  expensive-query profiles, capability shrinkage, stable IDs, and redacted
+  failures.
 
 ### Changed
 
 - The root module has a tidy dependency graph and no local replacements.
   Released core and Adapter revisions are publicly resolvable; standalone
-  `GOWORK=off` LDAP verification additionally requires the declared independent
-  LDAP Adapter version to become available.
+  `GOWORK=off` LDAP and Elasticsearch verification additionally requires their
+  declared independent Adapter versions to become available.

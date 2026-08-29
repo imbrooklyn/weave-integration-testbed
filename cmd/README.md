@@ -1,20 +1,22 @@
 # Runnable Adapter Demos
 
-The six Adapter commands in this directory execute the same canonical
+The seven Adapter commands in this directory execute the same canonical
 Predicate scenarios and expected record-ID sets as the automated integration
 tests. They are read-only query demonstrations. SQL schema and seed ownership
 remains in `testdata/mysql` and `testdata/postgres`; MongoDB initial data remains
 in `testdata/mongo` and is checked against the shared compiler fixture. The
 OpenLDAP custom Schema and base LDIF remain in `testdata/directory`; runtime
-entries are generated from the same shared fixture.
+entries are generated from the same shared fixture. Elasticsearch settings,
+explicit mapping, and NDJSON remain in `testdata/elasticsearch` and are checked
+against that fixture before loading.
 
 ## Environment lifecycle
 
 Start and initialize all current services:
 
 ```sh
-docker compose --profile all up --detach --wait --wait-timeout 180
-go run ./cmd/testbedctl check --backend=all --timeout=2m
+docker compose --profile all up --detach --wait --wait-timeout 240
+go run ./cmd/testbedctl check --backend=all --timeout=3m
 ```
 
 Run every Adapter path:
@@ -26,6 +28,7 @@ go run ./cmd/gorm --backend=all --timeout=2m
 go run ./cmd/goqu --backend=all --timeout=2m
 go run ./cmd/mongo --timeout=2m
 go run ./cmd/ldap --timeout=2m
+go run ./cmd/elasticsearch --timeout=3m
 ```
 
 Always stop the local services when finished:
@@ -39,6 +42,9 @@ use `testbedctl --backend=mongo`.
 
 To run only OpenLDAP, replace `all` with `directory` and use
 `testbedctl --backend=ldap`.
+
+To run only Elasticsearch, replace `all` with `search` and use
+`testbedctl --backend=elasticsearch`.
 
 ## What each Demo proves
 
@@ -109,10 +115,31 @@ attributes, present empty IA5 and absent values, integer ordering, substring
 rules, presence guards, all four Logic forms, Native/Expr, stable DNs and IDs,
 RFC 4515 escaping including NUL, and structured unsupported-operation errors.
 
+### elasticsearch
+
+The Elasticsearch Demo creates immutable typed Field and Mapping declarations,
+compiles official go-elasticsearch v9.5.1 Query values, and passes them directly
+to a real Elasticsearch 9.5.2 typed Search request. It verifies Lucene 10.5.1,
+recreates the strict mapping and six-record fixture, and runs all 31 canonical
+match sets plus 16 shared search seams without a skip.
+
+The additional cases cover long/double/date/boolean and keyword/wildcard/text
+mappings, source null, missing, empty string and array, `null_value` and
+companion markers, exact exists guards, literal `*`, `?`, backslash and Unicode,
+the expensive-query policy boundary, analyzed Expr, Native, depth-eight Logic,
+capability shrinkage, and redacted stable-first errors. Date intervals use GTE
+plus LTE because the core Between operation is numeric.
+
+The Demo output identifies both locked server components, for example:
+
+```text
+elasticsearch/elasticsearch-9.5.2-lucene-10.5.1: 47 passed, 0 skipped
+```
+
 ## Options and exit status
 
 `gormgen`, `gorm`, and `goqu` accept `--backend=all`, `--backend=mysql`, or
-`--backend=postgres`. All six Adapter Demos accept a positive `--timeout`; SQL
+`--backend=postgres`. All seven Adapter Demos accept a positive `--timeout`; SQL
 timeouts apply per backend.
 
 - Exit 0: every executed match set equals its canonical expected IDs.
@@ -120,6 +147,7 @@ timeouts apply per backend.
 - Exit 2: command-line usage is invalid.
 
 Each command cancels its timeout context and closes any client or database
-pool. Output contains scenario names, fixture IDs, and non-secret MongoDB or
-OpenLDAP identities, but not credentials, connection strings, stored text
-values, generated SQL, serialized BSON filters, or LDAP filter text.
+pool. Output contains scenario names, fixture IDs, and non-secret MongoDB,
+OpenLDAP, Elasticsearch, or Lucene identities, but not credentials, connection
+strings, stored text values, generated SQL, serialized BSON filters, LDAP
+filter text, or Elasticsearch Query JSON.

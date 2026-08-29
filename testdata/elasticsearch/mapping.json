@@ -1,0 +1,47 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "number_value": {
+      "type": "long",
+      "null_value": -9223372036854775808
+    },
+    "text_value": {"type": "wildcard"},
+    "text_value_state": {"type": "keyword"},
+    "nullable_number": {
+      "type": "long",
+      "null_value": -9223372036854775808
+    },
+    "nullable_text": {"type": "wildcard"},
+    "nullable_text_state": {"type": "keyword"},
+    "equality_only_text": {"type": "wildcard"},
+    "equality_only_text_state": {"type": "keyword"},
+    "decimal_value": {"type": "double"},
+    "created_at": {
+      "type": "date",
+      "format": "strict_date_optional_time_nanos"
+    },
+    "bool_value": {"type": "boolean"},
+    "analyzed_text": {"type": "text"},
+    "normalized_keyword": {
+      "type": "keyword",
+      "normalizer": "weave_lowercase"
+    },
+    "expensive_keyword": {"type": "keyword"},
+    "pattern_wildcard": {"type": "wildcard"},
+    "tags": {"type": "keyword"},
+    "source_null": {"type": "keyword"},
+    "raw_null_keyword": {
+      "type": "keyword",
+      "null_value": "__WEAVE_NULL__"
+    },
+    "untracked_keyword": {"type": "keyword"},
+    "empty_keyword": {"type": "keyword"},
+    "empty_array_keyword": {"type": "keyword"},
+    "nested_items": {
+      "type": "nested",
+      "properties": {
+        "name": {"type": "keyword"}
+      }
+    }
+  }
+}

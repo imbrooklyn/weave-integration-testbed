@@ -153,11 +153,42 @@ jobs:
         if: always()
         run: docker compose --profile directory down --volumes --remove-orphans
 
+  search:
+    name: Elasticsearch 9.5.2
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: weave-search-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start Elasticsearch
+        run: docker compose --profile search up --detach --wait --wait-timeout 240
+      - name: Check Elasticsearch fixture replay
+        run: |
+          go run ./cmd/testbedctl check --backend=elasticsearch --timeout=3m
+          go run ./cmd/testbedctl check --backend=elasticsearch --timeout=3m
+      - name: Run Elasticsearch Adapter demo
+        run: go run ./cmd/elasticsearch --timeout=3m
+      - name: Run real Elasticsearch contract
+        run: >-
+          go test -race -count=1 -tags=integration
+          -run '^TestElasticsearch' ./integration
+      - name: Stop Elasticsearch
+        if: always()
+        run: docker compose --profile search down --volumes --remove-orphans
+
   cross-model:
     name: Cross-model match sets
-    needs: [sql, document, directory]
+    needs: [sql, document, directory, search]
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       COMPOSE_PROJECT_NAME: weave-cross-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -169,7 +200,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Start all current services
-        run: docker compose --profile all up --detach --wait --wait-timeout 180
+        run: docker compose --profile all up --detach --wait --wait-timeout 240
       - name: Reset all fixtures
         run: go run ./cmd/testbedctl check --backend=all --timeout=2m
       - name: Compare cross-model match sets

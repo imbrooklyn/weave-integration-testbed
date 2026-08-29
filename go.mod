@@ -4,9 +4,11 @@ go 1.27
 
 require (
 	github.com/doug-martin/goqu/v9 v9.19.0
+	github.com/elastic/go-elasticsearch/v9 v9.5.1
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/imbrooklyn/weave v0.1.0-alpha.1.0.20260827162553-afbd6ad7c032
+	github.com/imbrooklyn/weave-adapters/elasticsearch v0.1.0-alpha.1
 	github.com/imbrooklyn/weave-adapters/goqu v0.0.0-20260828122433-e11008af9c41
 	github.com/imbrooklyn/weave-adapters/gorm v0.1.0-alpha.1.0.20260828122433-e11008af9c41
 	github.com/imbrooklyn/weave-adapters/gormgen v0.1.0-alpha.1.0.20260828122433-e11008af9c41

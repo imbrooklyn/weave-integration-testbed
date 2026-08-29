@@ -150,10 +150,40 @@ services:
       start_period: 20s
     networks: [directory]
 
+  elasticsearch:
+    image: "${WEAVE_TESTBED_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:9.5.2@sha256:9c1e1afc2bda921b35025e21c72ec6e392266995aa35ad6a47887363592718be}"
+    profiles: [search, all]
+    restart: "no"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      search.allow_expensive_queries: "true"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${WEAVE_TESTBED_ELASTICSEARCH_PORT:-39200}:9200"
+    tmpfs:
+      - /usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent
+          'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s'
+          >/dev/null
+      interval: 2s
+      timeout: 6s
+      retries: 90
+      start_period: 40s
+    networks: [search]
+
 networks:
   sql:
     driver: bridge
   document:
     driver: bridge
   directory:
+    driver: bridge
+  search:
     driver: bridge
